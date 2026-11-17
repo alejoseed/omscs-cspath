@@ -25,7 +25,11 @@ export const metadata: Metadata = {
     "Sort every OMSCS course into interest buckets and get ranked ten-course degree plans.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html
       lang="en"
