@@ -83,5 +83,4 @@ export interface CatalogPayload {
   specializations: SpecSummary[];
   buckets: typeof BUCKETS;
   starterInterests: Record<string, BucketId>;
-  deepseekConfigured: boolean;
 }

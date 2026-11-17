@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { getD1 } from "@/lib/d1.server";
 import { loadInterests } from "@/lib/planner";
+import { deepseekKeySchema } from "@/lib/deepseek-key";
 import { generatePlans } from "@/lib/plan.server";
 import { clientKey } from "@/lib/rate-limit.server";
 
@@ -15,8 +16,13 @@ export const Route = createFileRoute("/api/plan")({
           return Response.json({ error: "Invalid JSON body." }, { status: 400 });
         }
 
-        const raw = (body as { interests?: unknown } | null)?.interests;
-        const outcome = await generatePlans(raw, clientKey(request));
+        const fields = (body ?? {}) as { interests?: unknown; deepseekApiKey?: unknown };
+        const apiKey = deepseekKeySchema.optional().safeParse(fields.deepseekApiKey);
+        if (!apiKey.success) {
+          return Response.json({ error: apiKey.error.issues[0]?.message }, { status: 400 });
+        }
+
+        const outcome = await generatePlans(fields.interests, clientKey(request), apiKey.data || null);
         if (!outcome.ok) {
           const { status, error, details, retryAfterSeconds } = outcome;
           return Response.json(details ? { error, details } : { error }, {

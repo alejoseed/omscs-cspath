@@ -1,13 +1,23 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest, setResponseHeader, setResponseStatus } from "@tanstack/react-start/server";
+import { z } from "zod";
+import { deepseekKeySchema } from "@/lib/deepseek-key";
 import { generatePlans } from "@/lib/plan.server";
 import { clientKey } from "@/lib/rate-limit.server";
-import type { BucketId } from "@/lib/types";
+
+const planInput = z.object({
+  interests: z.record(z.string(), z.enum(["high", "medium", "low"])),
+  deepseekApiKey: deepseekKeySchema.optional(),
+});
 
 export const createPlan = createServerFn({ method: "POST" })
-  .validator((data: { interests: Record<string, BucketId> }) => data)
+  .validator(planInput)
   .handler(async ({ data }) => {
-    const outcome = await generatePlans(data?.interests, clientKey(getRequest()));
+    const outcome = await generatePlans(
+      data.interests,
+      clientKey(getRequest()),
+      data.deepseekApiKey || null,
+    );
     if (!outcome.ok) {
       setResponseStatus(outcome.status);
       if (outcome.retryAfterSeconds) {

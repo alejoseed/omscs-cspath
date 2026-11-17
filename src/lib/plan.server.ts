@@ -6,7 +6,7 @@ import {
   sanitizeInterests,
   type BucketId,
 } from "@/lib/planner";
-import { rankPlans, deepseekConfigured } from "@/lib/llm.server";
+import { rankPlans } from "@/lib/llm.server";
 import { checkRateLimit, pruneRateWindows } from "@/lib/rate-limit.server";
 import type { PlanResponse } from "@/lib/types";
 
@@ -20,7 +20,11 @@ export type PlanFailure = {
 
 export type PlanOutcome = { ok: true; data: PlanResponse } | PlanFailure;
 
-export async function generatePlans(rawInterests: unknown, clientKey: string): Promise<PlanOutcome> {
+export async function generatePlans(
+  rawInterests: unknown,
+  clientKey: string,
+  apiKey: string | null,
+): Promise<PlanOutcome> {
   const db = getD1();
   await pruneRateWindows(db);
   const limit = await checkRateLimit(db, clientKey);
@@ -77,6 +81,7 @@ export async function generatePlans(rawInterests: unknown, clientKey: string): P
   const narrative = await rankPlans(
     set.plans,
     Object.fromEntries(interests) as Record<string, string>,
+    apiKey,
   );
 
   const bySpec = new Map(set.plans.map((p) => [p.specId, p]));
@@ -93,7 +98,7 @@ export async function generatePlans(rawInterests: unknown, clientKey: string): P
     data: {
       engine: narrative.engine,
       model: narrative.model,
-      deepseekConfigured: deepseekConfigured(),
+      deepseekConfigured: apiKey !== null,
       summary: narrative.summary,
       warning: narrative.error ?? null,
       plans: finalPlans.map((plan, i) => ({

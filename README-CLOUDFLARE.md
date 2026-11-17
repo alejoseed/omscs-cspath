@@ -21,10 +21,7 @@ pnpm db:create
 # 4. Load the schema and the catalog
 pnpm db:migrate:remote
 
-# 5. Give the Worker your DeepSeek key
-pnpm wrangler secret put DEEPSEEK_API_KEY
-
-# 6. Ship it
+# 5. Ship it
 pnpm run deploy   # `pnpm deploy` is a pnpm built-in, so use `run`
 ```
 
@@ -57,12 +54,7 @@ same account.
 - `src/lib/planner.ts` — `loadCatalog()` / `loadInterests()` are now `async`; everything downstream
   (solver, validation, ranking) is pure and unchanged.
 
-## Local secrets
+## DeepSeek key
 
-`wrangler` and the Vite plugin read local secrets from `.dev.vars` (gitignored):
-
-```bash
-echo 'DEEPSEEK_API_KEY=sk-...' > .dev.vars
-```
-
-Without it the app runs solver-only.
+There is no DeepSeek secret to set. Visitors bring their own key in the app; it stays in their
+browser and is sent only with their plan runs.

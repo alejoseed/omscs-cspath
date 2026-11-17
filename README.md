@@ -40,14 +40,13 @@ pnpm install
 pnpm wrangler login
 pnpm db:create            # then paste the id into wrangler.jsonc
 pnpm db:migrate:remote    # schema + catalog
-pnpm wrangler secret put DEEPSEEK_API_KEY
 pnpm run deploy         # `pnpm deploy` is a pnpm built-in, so use `run`
 ```
 
 There is no local database file any more: the app reads D1 through the `DB` binding, both locally
 and in production. `pnpm dev` runs the server inside workerd via the Cloudflare Vite plugin, so dev
-uses the same local D1 as `pnpm preview` (run `pnpm db:migrate` once first). For a local DeepSeek
-key, put `DEEPSEEK_API_KEY=...` in `.dev.vars` (gitignored). Full setup and troubleshooting live in
+uses the same local D1 as `pnpm preview` (run `pnpm db:migrate` once first). Full setup and
+troubleshooting live in
 [README-CLOUDFLARE.md](./README-CLOUDFLARE.md). Useful scripts:
 
 ```bash
@@ -64,17 +63,21 @@ pnpm lint
 DeepSeek is the only LLM provider in this app. It is called over its OpenAI-compatible
 `/chat/completions` endpoint, so there is no SDK dependency.
 
+The app is **bring your own key**. A visitor pastes their DeepSeek API key into the "Your DeepSeek
+key" card; it is kept in that browser's `localStorage` and sent with each plan run, where the Worker
+uses it for that one DeepSeek call. The server never stores or logs it, and there is no
+`DEEPSEEK_API_KEY` secret to configure. Without a key, plans are solver-ranked.
+
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `DEEPSEEK_API_KEY` | — | Required for LLM ranking. Without it the app runs solver-only. |
 | `DEEPSEEK_MODEL` | `deepseek-chat` | Model name sent to the API. |
 | `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | Override for a proxy or gateway. |
 | `PLAN_RATE_LIMIT` | `15` | Plan runs allowed per client per window. |
 | `PLAN_RATE_WINDOW_MS` | `60000` | Length of that window in milliseconds. |
 
-`DEEPSEEK_API_KEY` is a Worker secret (`pnpm wrangler secret put DEEPSEEK_API_KEY`), never a file in
-the repo. The rate-limit counters live in D1 rather than process memory, because a Workers isolate
-does not outlive a request.
+These are plain Worker variables (`vars` in `wrangler.jsonc`), not secrets. The rate-limit counters
+live in D1 rather than process memory, because a Workers isolate does not outlive a request.
+`POST /api/plan` accepts the key as an optional `deepseekApiKey` field next to `interests`.
 
 The model only ever **reorders and explains** plans the solver already produced. It never invents
 courses, and every plan is re-validated server-side before it is returned. If the call fails, times

@@ -107,10 +107,7 @@ interface DeepSeekResponse {
   choices?: { message?: { content?: string } }[];
 }
 
-async function callDeepSeek(system: string, user: string): Promise<string> {
-  const apiKey = process.env.DEEPSEEK_API_KEY;
-  if (!apiKey) throw new Error("DEEPSEEK_API_KEY is not set.");
-
+async function callDeepSeek(system: string, user: string, apiKey: string): Promise<string> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs());
 
@@ -153,9 +150,6 @@ async function callDeepSeek(system: string, user: string): Promise<string> {
   return content;
 }
 
-export function deepseekConfigured(): boolean {
-  return Boolean(process.env.DEEPSEEK_API_KEY);
-}
 
 export function solverNarrative(plans: Plan[], totalRanked: number): Narrative {
   const ranked: RankedPlan[] = plans.map((p, i) => {
@@ -211,7 +205,7 @@ export function solverNarrative(plans: Plan[], totalRanked: number): Narrative {
     summary: best
       ? `${best.specName} ranks first, covering ${matched(best)} of your ${totalRanked} ranked courses with a ${Math.round(
           best.fit * 100,
-        )}% weighted-interest match. Add a DEEPSEEK_API_KEY to get advisor-style commentary instead of this rule-based summary.`
+        )}% weighted-interest match. Add your DeepSeek API key to get advisor-style commentary instead of this rule-based summary.`
       : "No plans could be built from the current buckets.",
     ranked,
   };
@@ -224,15 +218,16 @@ function matched(plan: Plan): number {
 export async function rankPlans(
   plans: Plan[],
   interests: Record<string, string>,
+  apiKey: string | null,
 ): Promise<Narrative> {
   const totalRanked = Object.keys(interests).length;
-  if (plans.length === 0) return solverNarrative(plans, totalRanked);
-  if (!deepseekConfigured()) return solverNarrative(plans, totalRanked);
+  if (plans.length === 0 || !apiKey) return solverNarrative(plans, totalRanked);
 
   try {
     const raw = await callDeepSeek(
       SYSTEM_PROMPT,
       buildUserPrompt(plans, interests),
+      apiKey,
     );
     const ranked = parseNarrative(raw, plans);
     if (!ranked) throw new Error("DeepSeek returned a ranking that could not be parsed.");

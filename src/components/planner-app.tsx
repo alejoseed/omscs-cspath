@@ -11,6 +11,7 @@ import { BucketBoard } from "@/components/bucket-board";
 import { CatalogBrowser } from "@/components/catalog-browser";
 import { PlanResults } from "@/components/plan-results";
 import { BUCKET_META } from "@/components/course-row";
+import { DeepseekKeyCard, useDeepseekKey } from "@/components/deepseek-key-card";
 import { cn } from "@/lib/utils";
 import {
   clearInterests,
@@ -34,11 +35,12 @@ export function PlannerApp({ payload }: { payload: CatalogPayload }) {
   const [tab, setTab] = useState<"board" | "catalog">("board");
   const resultsRef = useRef<HTMLDivElement>(null);
 
+  const deepseekApiKey = useDeepseekKey();
   const createPlanFn = useServerFn(createPlan);
   const plan = useMutation({
     mutationFn: (current: Record<string, BucketId>) =>
       createPlanFn({
-        data: { interests: current },
+        data: { interests: current, deepseekApiKey: deepseekApiKey ?? undefined },
         signal: AbortSignal.timeout(45_000),
       }),
     onSuccess: () => {
@@ -113,7 +115,7 @@ export function PlannerApp({ payload }: { payload: CatalogPayload }) {
             <p className="mt-1.5 max-w-xl text-[12.5px] leading-relaxed text-muted-foreground">
               Rank every OMSCS course into three interest buckets. The solver builds a legal
               ten-course, thirty-credit plan for each specialization, then DeepSeek ranks the
-              paths for you.
+              paths for you with your own API key.
             </p>
           </div>
 
@@ -233,13 +235,11 @@ export function PlannerApp({ payload }: { payload: CatalogPayload }) {
         </div>
 
         <aside ref={resultsRef} className="min-w-0 lg:sticky lg:top-4 lg:self-start">
+          <DeepseekKeyCard />
           {result ? (
             <PlanResults result={result} onReset={clearResult} />
           ) : (
-            <EmptyResults
-              specializations={catalog.specializations}
-              deepseekConfigured={catalog.deepseekConfigured}
-            />
+            <EmptyResults specializations={catalog.specializations} />
           )}
         </aside>
       </div>
@@ -247,30 +247,12 @@ export function PlannerApp({ payload }: { payload: CatalogPayload }) {
   );
 }
 
-function EmptyResults({
-  specializations,
-  deepseekConfigured,
-}: {
-  specializations: SpecSummary[];
-  deepseekConfigured: boolean;
-}) {
+function EmptyResults({ specializations }: { specializations: SpecSummary[] }) {
   return (
     <div className="rounded-xl border border-border bg-card/40 p-4">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-          Ranked paths
-        </h2>
-        <span
-          className={cn(
-            "rounded-sm border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider",
-            deepseekConfigured
-              ? "border-high/40 bg-high/10 text-foreground/80"
-              : "border-border text-muted-foreground",
-          )}
-        >
-          {deepseekConfigured ? "DeepSeek ready" : "Solver only"}
-        </span>
-      </div>
+      <h2 className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+        Ranked paths
+      </h2>
       <p className="mt-2 text-[12.5px] leading-relaxed text-muted-foreground">
         Once you sort at least four courses, press{" "}
         <span className="font-medium text-foreground">Create path</span>. You get one legal plan
@@ -299,7 +281,7 @@ function EmptyResults({
           "Drag courses into Highly / Moderately / Barely interested.",
           "A constraint solver satisfies each specialization's real course rules.",
           "Free electives are filled from your highest-weighted remaining picks.",
-          "DeepSeek ranks the six plans and explains the trade-offs.",
+          "With your DeepSeek key, DeepSeek ranks the six plans and explains the trade-offs.",
         ].map((step, i) => (
           <div key={step} className="flex gap-2">
             <span className="font-mono text-[9px] text-muted-foreground tabular-nums">
@@ -310,18 +292,6 @@ function EmptyResults({
         ))}
       </div>
 
-      {!deepseekConfigured && (
-        <div className="mt-3 rounded-md border border-dashed border-border px-2.5 py-2">
-          <p className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground">
-            Optional
-          </p>
-          <p className="mt-1 text-[11px] leading-snug text-foreground/70">
-            Add <code className="rounded bg-muted px-1 font-mono text-[10px]">DEEPSEEK_API_KEY</code>{" "}
-            to <code className="rounded bg-muted px-1 font-mono text-[10px]">.env.local</code> and
-            every path comes back with DeepSeek&apos;s written recommendation.
-          </p>
-        </div>
-      )}
     </div>
   );
 }

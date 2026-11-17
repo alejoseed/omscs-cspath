@@ -7,6 +7,7 @@ let lastBody: {
   model?: string;
   messages: { role: string; content: string }[];
 } | null = null;
+let lastAuthorization: string | undefined;
 
 function assert(condition: unknown, message: string) {
   if (!condition) throw new Error(message);
@@ -18,6 +19,7 @@ async function main() {
     req.on("data", (chunk) => (raw += chunk));
     req.on("end", () => {
       lastBody = JSON.parse(raw);
+      lastAuthorization = req.headers.authorization;
 
       if (mode === "error") {
         res.writeHead(401, { "content-type": "application/json" });
@@ -49,13 +51,13 @@ async function main() {
 
   await new Promise<void>((resolve) => server.listen(4599, "127.0.0.1", resolve));
 
-  process.env.DEEPSEEK_API_KEY = "test-key";
   process.env.DEEPSEEK_BASE_URL = "http://127.0.0.1:4599";
   process.env.DEEPSEEK_MODEL = "deepseek-chat";
 
   const { buildCatalogFromData, STARTER_INTERESTS } = await import("../src/data/catalog");
   const { buildAllPlans } = await import("../src/lib/planner");
-  const { rankPlans, deepseekConfigured } = await import("../src/lib/llm.server");
+  const { rankPlans } = await import("../src/lib/llm.server");
+  const visitorKey = "sk-visitor-test-key";
 
   
   const catalog = buildCatalogFromData();
@@ -65,7 +67,8 @@ async function main() {
   const set = buildAllPlans(catalog, interests);
   const bucketMap = Object.fromEntries(interests);
 
-  const good = await rankPlans(set.plans, bucketMap);
+  const good = await rankPlans(set.plans, bucketMap, visitorKey);
+  assert(lastAuthorization === `Bearer ${visitorKey}`, "the visitor's key was not sent to DeepSeek");
   assert(good.engine === "deepseek", `expected deepseek engine, got ${good.engine}`);
   assert(good.model === "deepseek-chat", `expected deepseek-chat, got ${good.model}`);
   assert(good.ranked.length === 6, `expected 6 ranked, got ${good.ranked.length}`);
@@ -85,22 +88,22 @@ async function main() {
   assert((prompt.match(/specId:/g) ?? []).length === 6, "prompt missing candidate plans");
 
   mode = "garbage";
-  const bad = await rankPlans(set.plans, bucketMap);
+  const bad = await rankPlans(set.plans, bucketMap, visitorKey);
   assert(bad.engine === "solver", `expected solver fallback, got ${bad.engine}`);
   assert(typeof bad.error === "string", "expected an error note on fallback");
   assert(bad.ranked.length === 6, "fallback must still rank every plan");
 
   mode = "error";
-  const failed = await rankPlans(set.plans, bucketMap);
+  const failed = await rankPlans(set.plans, bucketMap, visitorKey);
   assert(failed.engine === "solver", `expected solver fallback, got ${failed.engine}`);
   assert(
     failed.error?.includes("401"),
     `expected the 401 to surface, got ${failed.error}`,
   );
 
-  delete process.env.DEEPSEEK_API_KEY;
-  assert(!deepseekConfigured(), "configured() should be false without a key");
-  const none = await rankPlans(set.plans, bucketMap);
+  lastAuthorization = undefined;
+  const none = await rankPlans(set.plans, bucketMap, null);
+  assert(lastAuthorization === undefined, "DeepSeek must not be called without a key");
   assert(none.engine === "solver", "expected solver engine with no key");
   assert(none.ranked.length === 6, "solver narrative must rank every plan");
 

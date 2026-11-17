@@ -1,6 +1,5 @@
 import { getD1 } from "@/lib/d1.server";
 import { loadCatalog, loadInterests } from "@/lib/planner";
-import { deepseekConfigured } from "@/lib/llm.server";
 import { BUCKETS } from "@/data/specializations";
 import type { BucketId, CatalogPayload } from "@/lib/types";
 
@@ -23,6 +22,5 @@ export async function loadCatalogPayload(): Promise<CatalogPayload> {
     })),
     buckets: BUCKETS,
     starterInterests: Object.fromEntries(interests) as Record<string, BucketId>,
-    deepseekConfigured: deepseekConfigured(),
   };
 }
