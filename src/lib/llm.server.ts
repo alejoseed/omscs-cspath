@@ -5,9 +5,11 @@ import type { Plan } from "@/lib/planner";
  * OpenAI-compatible /chat/completions endpoint, so no SDK is needed.
  * https://api-docs.deepseek.com
  */
-const DEEPSEEK_BASE_URL = process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com";
-const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL ?? "deepseek-chat";
-const DEEPSEEK_TIMEOUT_MS = Number(process.env.DEEPSEEK_TIMEOUT_MS ?? 25_000);
+// Read per call rather than at module scope, so the server picks up the
+// environment it is actually running with.
+const baseUrl = () => process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com";
+const model = () => process.env.DEEPSEEK_MODEL ?? "deepseek-chat";
+const timeoutMs = () => Number(process.env.DEEPSEEK_TIMEOUT_MS ?? 25_000);
 
 export interface RankedPlan {
   specId: string;
@@ -119,18 +121,18 @@ async function callDeepSeek(system: string, user: string): Promise<string> {
   // Hard cap so a stalled upstream can never hold the route open; the solver
   // ranking is a perfectly good result if DeepSeek is slow.
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), DEEPSEEK_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs());
 
   let res: Response;
   try {
-    res = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
+    res = await fetch(`${baseUrl()}/chat/completions`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: DEEPSEEK_MODEL,
+        model: model(),
         temperature: 0.3,
         response_format: { type: "json_object" },
         messages: [
@@ -142,7 +144,7 @@ async function callDeepSeek(system: string, user: string): Promise<string> {
     });
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(`DeepSeek timed out after ${DEEPSEEK_TIMEOUT_MS}ms.`);
+      throw new Error(`DeepSeek timed out after ${timeoutMs()}ms.`, { cause: error });
     }
     throw error;
   } finally {
@@ -264,7 +266,7 @@ export async function rankPlans(
 
     return {
       engine: "deepseek",
-      model: DEEPSEEK_MODEL,
+      model: model(),
       summary: String(parsed.summary ?? "").slice(0, 600),
       ranked,
     };

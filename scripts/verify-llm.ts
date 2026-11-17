@@ -65,7 +65,7 @@ async function main() {
 
   const { buildCatalogFromData, STARTER_INTERESTS } = await import("../src/data/catalog");
   const { buildAllPlans } = await import("../src/lib/planner");
-  const { rankPlans, deepseekConfigured } = await import("../src/lib/llm");
+  const { rankPlans, deepseekConfigured } = await import("../src/lib/llm.server");
 
   
   const catalog = buildCatalogFromData();

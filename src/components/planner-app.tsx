@@ -1,5 +1,3 @@
-"use client";
-
 import {
   useCallback,
   useMemo,
@@ -7,6 +5,8 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { BucketBoard } from "@/components/bucket-board";
 import { CatalogBrowser } from "@/components/catalog-browser";
 import { PlanResults } from "@/components/plan-results";
@@ -19,8 +19,8 @@ import {
   saveInterests,
   subscribe,
 } from "@/lib/interest-store";
-import type { CatalogPayload } from "@/lib/catalog-server";
-import type { BucketId, PlanResponse, SpecSummary } from "@/lib/types";
+import { createPlan } from "@/lib/plan.functions";
+import type { BucketId, CatalogPayload, SpecSummary } from "@/lib/types";
 
 const MIN_RANKED = 4;
 
@@ -34,11 +34,32 @@ export function PlannerApp({ payload }: { payload: CatalogPayload }) {
   const [draft, setDraft] = useState<Record<string, BucketId> | null>(null);
   const interests = draft ?? saved ?? payload.starterInterests;
 
-  const [result, setResult] = useState<PlanResponse | null>(null);
-  const [generating, setGenerating] = useState(false);
-  const [generateError, setGenerateError] = useState<string | null>(null);
   const [tab, setTab] = useState<"board" | "catalog">("board");
   const resultsRef = useRef<HTMLDivElement>(null);
+
+  const createPlanFn = useServerFn(createPlan);
+  const plan = useMutation({
+    mutationFn: (current: Record<string, BucketId>) =>
+      createPlanFn({
+        data: { interests: current },
+        // A stalled request must surface as an error, not an endless "Solving…".
+        signal: AbortSignal.timeout(45_000),
+      }),
+    onSuccess: () => {
+      requestAnimationFrame(() => {
+        resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    },
+  });
+  const result = plan.data ?? null;
+  const generating = plan.isPending;
+  const generateError = plan.error
+    ? plan.error.name === "TimeoutError" || plan.error.name === "AbortError"
+      ? "The plan request timed out. Try again — the solver runs in a few seconds."
+      : plan.error.message || "Could not generate plans."
+    : null;
+  // Any edit to the buckets makes the current result stale, so it is dropped.
+  const clearResult = plan.reset;
 
   const update = useCallback((next: Record<string, BucketId>) => {
     setDraft(next);
@@ -52,9 +73,9 @@ export function PlannerApp({ payload }: { payload: CatalogPayload }) {
       if (bucket === null) delete next[courseId];
       else next[courseId] = bucket;
       update(next);
-      setResult(null);
+      clearResult();
     },
-    [interests, update],
+    [interests, update, clearResult],
   );
 
   const clearBucket = useCallback(
@@ -64,49 +85,17 @@ export function PlannerApp({ payload }: { payload: CatalogPayload }) {
         if (b === bucket) delete next[id];
       }
       update(next);
-      setResult(null);
+      clearResult();
     },
-    [interests, update],
+    [interests, update, clearResult],
   );
 
   const resetAll = useCallback(() => {
     setDraft({});
-    setResult(null);
+    clearResult();
     clearInterests();
-  }, []);
+  }, [clearResult]);
 
-  const generate = useCallback(async () => {
-    setGenerating(true);
-    setGenerateError(null);
-    // A stalled request must surface as an error, not an endless "Solving…".
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 45_000);
-    try {
-      const res = await fetch("/api/plan", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ interests }),
-        signal: controller.signal,
-      });
-      const body = (await res.json()) as PlanResponse & { error?: string };
-      if (!res.ok) throw new Error(body.error ?? `Plan request failed (${res.status})`);
-      setResult(body);
-      requestAnimationFrame(() => {
-        resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    } catch (error) {
-      setGenerateError(
-        error instanceof Error
-          ? error.name === "AbortError"
-            ? "The plan request timed out. Try again — the solver runs in a few seconds."
-            : error.message
-          : "Could not generate plans.",
-      );
-    } finally {
-      clearTimeout(timeout);
-      setGenerating(false);
-    }
-  }, [interests]);
 
   const counts = useMemo(() => {
     const c: Record<BucketId, number> = { high: 0, medium: 0, low: 0 };
@@ -125,7 +114,7 @@ export function PlannerApp({ payload }: { payload: CatalogPayload }) {
             <p className="font-mono text-[9.5px] uppercase tracking-[0.18em] text-muted-foreground">
               Georgia Tech · Online MS in Computer Science
             </p>
-            <h1 className="mt-1 font-[family-name:var(--font-display)] text-[34px] leading-none tracking-tight sm:text-[42px]">
+            <h1 className="mt-1 font-display text-[34px] leading-none tracking-tight sm:text-[42px]">
               Path Builder
             </h1>
             <p className="mt-1.5 max-w-xl text-[12.5px] leading-relaxed text-muted-foreground">
@@ -230,7 +219,7 @@ export function PlannerApp({ payload }: { payload: CatalogPayload }) {
             <button
               type="button"
               disabled={!ready || generating}
-              onClick={() => void generate()}
+              onClick={() => plan.mutate(interests)}
               className={cn(
                 "shrink-0 rounded-md px-4 py-2 font-mono text-[10.5px] uppercase tracking-widest transition-all",
                 ready
@@ -252,7 +241,7 @@ export function PlannerApp({ payload }: { payload: CatalogPayload }) {
 
         <aside ref={resultsRef} className="min-w-0 lg:sticky lg:top-4 lg:self-start">
           {result ? (
-            <PlanResults result={result} onReset={() => setResult(null)} />
+            <PlanResults result={result} onReset={clearResult} />
           ) : (
             <EmptyResults
               specializations={catalog.specializations}

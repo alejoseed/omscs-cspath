@@ -1,16 +1,8 @@
-import { getD1 } from "@/lib/d1";
+import { getD1 } from "@/lib/d1.server";
 import { loadCatalog, loadInterests } from "@/lib/planner";
-import { deepseekConfigured } from "@/lib/llm";
+import { deepseekConfigured } from "@/lib/llm.server";
 import { BUCKETS } from "@/data/specializations";
-import type { BucketId, Course, SpecSummary } from "@/lib/types";
-
-export interface CatalogPayload {
-  courses: Course[];
-  specializations: SpecSummary[];
-  buckets: typeof BUCKETS;
-  starterInterests: Record<string, BucketId>;
-  deepseekConfigured: boolean;
-}
+import type { BucketId, CatalogPayload } from "@/lib/types";
 
 /**
  * Loads everything the board needs on the server, so the page is complete in the

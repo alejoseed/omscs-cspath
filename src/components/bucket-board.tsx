@@ -1,5 +1,3 @@
-"use client";
-
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { CourseRow, BUCKET_META } from "@/components/course-row";

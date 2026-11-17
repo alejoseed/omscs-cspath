@@ -1,4 +1,4 @@
-import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { env } from "cloudflare:workers";
 
 /**
  * Cloudflare D1 binding. D1 has no synchronous driver, so every query in this
@@ -25,23 +25,10 @@ export interface D1Database {
 }
 
 export function getD1(): D1Database {
-  const { env } = getCloudflareContext();
   const db = (env as { DB?: D1Database }).DB;
   if (!db) {
     throw new Error(
-      "D1 binding DB is missing. Run `npm run db:create`, put the database_id in wrangler.jsonc, then `npm run db:migrate`.",
-    );
-  }
-  return db;
-}
-
-/** Await this inside routes Next may evaluate outside a request (ISR/SSG). */
-export async function getD1Async(): Promise<D1Database> {
-  const { env } = await getCloudflareContext({ async: true });
-  const db = (env as { DB?: D1Database }).DB;
-  if (!db) {
-    throw new Error(
-      "D1 binding DB is missing. Run `npm run db:create`, put the database_id in wrangler.jsonc, then `npm run db:migrate`.",
+      "D1 binding DB is missing. Run `pnpm db:create`, put the database_id in wrangler.jsonc, then `pnpm db:migrate`.",
     );
   }
   return db;

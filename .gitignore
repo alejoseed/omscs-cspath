@@ -13,9 +13,9 @@
 # testing
 /coverage
 
-# next.js
-/.next/
-/out/
+# tanstack start / vite
+/.tanstack/
+/dist/
 
 # production
 /build
@@ -39,7 +39,6 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
-next-env.d.ts
 
 # local sqlite scratch (no longer used by the app)
 /data/*.db
@@ -47,7 +46,6 @@ next-env.d.ts
 /data/*.db-shm
 
 # cloudflare
-/.open-next/
 /.wrangler/
 cloudflare-env.d.ts
 .dev.vars

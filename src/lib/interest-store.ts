@@ -1,5 +1,3 @@
-"use client";
-
 import type { BucketId } from "@/lib/types";
 
 const KEY = "omscs-path-builder:interests:v1";

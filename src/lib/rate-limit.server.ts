@@ -1,4 +1,4 @@
-import type { D1Database } from "@/lib/d1";
+import type { D1Database } from "@/lib/d1.server";
 
 /**
  * Fixed-window rate limiter for the expensive /api/plan route. It is stored in

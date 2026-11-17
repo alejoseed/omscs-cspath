@@ -1,4 +1,4 @@
-import type { D1Database } from "@/lib/d1";
+import type { D1Database } from "@/lib/d1.server";
 import { BUCKETS, UNASSIGNED_WEIGHT } from "@/data/specializations";
 
 export interface Course {

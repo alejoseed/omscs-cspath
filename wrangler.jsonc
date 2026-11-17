@@ -1,16 +1,12 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "omscs-path-builder",
-  "main": ".open-next/worker.js",
+  "main": "@tanstack/react-start/server-entry",
   "compatibility_date": "2026-11-16",
   "compatibility_flags": ["nodejs_compat"],
   "upload_source_maps": true,
   "observability": {
     "enabled": true
-  },
-  "assets": {
-    "directory": ".open-next/assets",
-    "binding": "ASSETS"
   },
   "d1_databases": [
     {
