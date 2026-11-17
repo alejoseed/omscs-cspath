@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { BucketBoard } from "@/components/bucket-board";
 import { CatalogBrowser } from "@/components/catalog-browser";
 import { PlanResults } from "@/components/plan-results";
@@ -8,90 +14,63 @@ import { BUCKET_META } from "@/components/course-row";
 import { cn } from "@/lib/utils";
 import {
   clearInterests,
-  readInterests,
-  writeInterests,
+  getServerSnapshot,
+  getSnapshot,
+  saveInterests,
+  subscribe,
 } from "@/lib/interest-store";
-import type {
-  BucketId,
-  Course,
-  PlanResponse,
-  SpecSummary,
-} from "@/lib/types";
-
-interface CatalogPayload {
-  courses: Course[];
-  specializations: SpecSummary[];
-  starterInterests: Record<string, BucketId>;
-  deepseekConfigured: boolean;
-}
+import type { CatalogPayload } from "@/lib/catalog-server";
+import type { BucketId, PlanResponse, SpecSummary } from "@/lib/types";
 
 const MIN_RANKED = 4;
 
-export function PlannerApp() {
-  const [catalog, setCatalog] = useState<CatalogPayload | null>(null);
-  const [interests, setInterests] = useState<Record<string, BucketId>>({});
-  const [loadError, setLoadError] = useState<string | null>(null);
+export function PlannerApp({ payload }: { payload: CatalogPayload }) {
+  const catalog = payload;
+
+  // Read the visitor's saved buckets during render. The server snapshot is null
+  // so the first paint matches the server markup exactly; React then re-renders
+  // with the stored value on the client.
+  const saved = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const [draft, setDraft] = useState<Record<string, BucketId> | null>(null);
+  const interests = draft ?? saved ?? payload.starterInterests;
+
   const [result, setResult] = useState<PlanResponse | null>(null);
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
-  const [hydrated, setHydrated] = useState(false);
   const [tab, setTab] = useState<"board" | "catalog">("board");
   const resultsRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/catalog")
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`Catalog request failed (${res.status})`);
-        return (await res.json()) as CatalogPayload;
-      })
-      .then((data) => {
-        if (cancelled) return;
-        setCatalog(data);
-        // Saved buckets win; otherwise start from the seeded example palette.
-        const saved = readInterests();
-        setInterests(saved ?? data.starterInterests);
-        setHydrated(true);
-      })
-      .catch((error: Error) => {
-        if (!cancelled) setLoadError(error.message);
-      });
-    return () => {
-      cancelled = true;
-    };
+  const update = useCallback((next: Record<string, BucketId>) => {
+    setDraft(next);
+    saveInterests(next);
   }, []);
 
   // Persist every change so a reload keeps the board exactly as it was.
-  useEffect(() => {
-    if (hydrated) writeInterests(interests);
-  }, [interests, hydrated]);
-
-  const assign = useCallback((courseId: string, bucket: BucketId | null) => {
-    setInterests((current) => {
-      const next = { ...current };
+  const assign = useCallback(
+    (courseId: string, bucket: BucketId | null) => {
+      const next = { ...interests };
       if (bucket === null) delete next[courseId];
       else next[courseId] = bucket;
-      return next;
-    });
-    setResult(null);
-  }, []);
+      update(next);
+      setResult(null);
+    },
+    [interests, update],
+  );
 
   const clearBucket = useCallback(
     (bucket: BucketId) => {
-      setInterests((current) => {
-        const next = { ...current };
-        for (const [id, b] of Object.entries(next)) {
-          if (b === bucket) delete next[id];
-        }
-        return next;
-      });
+      const next = { ...interests };
+      for (const [id, b] of Object.entries(next)) {
+        if (b === bucket) delete next[id];
+      }
+      update(next);
       setResult(null);
     },
-    [],
+    [interests, update],
   );
 
   const resetAll = useCallback(() => {
-    setInterests({});
+    setDraft({});
     setResult(null);
     clearInterests();
   }, []);
@@ -99,11 +78,15 @@ export function PlannerApp() {
   const generate = useCallback(async () => {
     setGenerating(true);
     setGenerateError(null);
+    // A stalled request must surface as an error, not an endless "Solving…".
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 45_000);
     try {
       const res = await fetch("/api/plan", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ interests }),
+        signal: controller.signal,
       });
       const body = (await res.json()) as PlanResponse & { error?: string };
       if (!res.ok) throw new Error(body.error ?? `Plan request failed (${res.status})`);
@@ -113,9 +96,14 @@ export function PlannerApp() {
       });
     } catch (error) {
       setGenerateError(
-        error instanceof Error ? error.message : "Could not generate plans.",
+        error instanceof Error
+          ? error.name === "AbortError"
+            ? "The plan request timed out. Try again — the solver runs in a few seconds."
+            : error.message
+          : "Could not generate plans.",
       );
     } finally {
+      clearTimeout(timeout);
       setGenerating(false);
     }
   }, [interests]);
@@ -128,33 +116,6 @@ export function PlannerApp() {
 
   const ranked = Object.keys(interests).length;
   const ready = ranked >= MIN_RANKED;
-
-  if (loadError) {
-    return (
-      <main className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-6 text-center">
-        <h1 className="text-lg font-semibold">The catalog did not load</h1>
-        <p className="mt-1.5 text-sm text-muted-foreground">{loadError}</p>
-        <button
-          type="button"
-          onClick={() => window.location.reload()}
-          className="mt-4 rounded-md border border-border px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider hover:bg-accent"
-        >
-          Retry
-        </button>
-      </main>
-    );
-  }
-
-  if (!catalog) {
-    return (
-      <main className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-6">
-        <div className="size-5 animate-spin rounded-full border-2 border-border border-t-foreground" />
-        <p className="mt-3 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-          Loading catalog from SQLite
-        </p>
-      </main>
-    );
-  }
 
   return (
     <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 pb-16 pt-6 sm:px-6">
