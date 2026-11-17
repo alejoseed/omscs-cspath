@@ -1,0 +1,30 @@
+import { env } from "cloudflare:workers";
+
+export interface D1Result<T = Record<string, unknown>> {
+  results: T[];
+  success: boolean;
+  meta?: Record<string, unknown>;
+}
+
+export interface D1PreparedStatement {
+  bind(...values: unknown[]): D1PreparedStatement;
+  first<T = Record<string, unknown>>(): Promise<T | null>;
+  all<T = Record<string, unknown>>(): Promise<D1Result<T>>;
+  run(): Promise<D1Result>;
+}
+
+export interface D1Database {
+  prepare(query: string): D1PreparedStatement;
+  batch(statements: D1PreparedStatement[]): Promise<D1Result[]>;
+  exec(query: string): Promise<{ count: number; duration: number }>;
+}
+
+export function getD1(): D1Database {
+  const db = (env as { DB?: D1Database }).DB;
+  if (!db) {
+    throw new Error(
+      "D1 binding DB is missing. Run `pnpm db:create`, put the database_id in wrangler.jsonc, then `pnpm db:migrate`.",
+    );
+  }
+  return db;
+}

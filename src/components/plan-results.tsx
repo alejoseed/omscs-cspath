@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { BUCKET_META } from "@/components/course-row";
@@ -241,8 +239,8 @@ export function PlanResults({
         )}
         {!result.deepseekConfigured && (
           <p className="mt-1.5 font-mono text-[10px] leading-snug text-muted-foreground">
-            No DEEPSEEK_API_KEY configured — plans are solver-ranked. Add the key and re-run
-            for advisor commentary.
+            No DeepSeek key — plans are solver-ranked. Add your key above and re-run for
+            advisor commentary.
           </p>
         )}
         <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[10px] text-muted-foreground">

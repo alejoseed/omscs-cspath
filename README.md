@@ -36,25 +36,26 @@ from D1, so fixing a rule means editing one row.
 ## Running it
 
 ```bash
-npm install
-npx wrangler login
-npm run db:create            # then paste the id into wrangler.jsonc
-npm run db:migrate:remote    # schema + catalog
-npx wrangler secret put DEEPSEEK_API_KEY
-npm run deploy
+pnpm install
+pnpm wrangler login
+pnpm db:create            # then paste the id into wrangler.jsonc
+pnpm db:migrate:remote    # schema + catalog
+pnpm run deploy         # `pnpm deploy` is a pnpm built-in, so use `run`
 ```
 
 There is no local database file any more: the app reads D1 through the `DB` binding, both locally
-(in `npm run preview`) and in production. Full setup and troubleshooting live in
+and in production. `pnpm dev` runs the server inside workerd via the Cloudflare Vite plugin, so dev
+uses the same local D1 as `pnpm preview` (run `pnpm db:migrate` once first). Full setup and
+troubleshooting live in
 [README-CLOUDFLARE.md](./README-CLOUDFLARE.md). Useful scripts:
 
 ```bash
-npm run db:seed      # regenerate migrations/0002_seed.sql from src/data
-npm run db:migrate   # apply migrations to the local D1 emulator
-npm run preview      # run the Worker locally against local D1
-npm run verify       # prove every generated plan is legal, and exercise DeepSeek handling
-npm run typecheck
-npm run lint
+pnpm db:seed      # regenerate migrations/0002_seed.sql from src/data
+pnpm db:migrate   # apply migrations to the local D1 emulator
+pnpm preview      # run the Worker locally against local D1
+pnpm verify       # prove every generated plan is legal, and exercise DeepSeek handling
+pnpm typecheck
+pnpm lint
 ```
 
 ## DeepSeek
@@ -62,17 +63,21 @@ npm run lint
 DeepSeek is the only LLM provider in this app. It is called over its OpenAI-compatible
 `/chat/completions` endpoint, so there is no SDK dependency.
 
+The app is **bring your own key**. A visitor pastes their DeepSeek API key into the "Your DeepSeek
+key" card; it is kept in that browser's `localStorage` and sent with each plan run, where the Worker
+uses it for that one DeepSeek call. The server never stores or logs it, and there is no
+`DEEPSEEK_API_KEY` secret to configure. Without a key, plans are solver-ranked.
+
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `DEEPSEEK_API_KEY` | — | Required for LLM ranking. Without it the app runs solver-only. |
 | `DEEPSEEK_MODEL` | `deepseek-chat` | Model name sent to the API. |
 | `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | Override for a proxy or gateway. |
 | `PLAN_RATE_LIMIT` | `15` | Plan runs allowed per client per window. |
 | `PLAN_RATE_WINDOW_MS` | `60000` | Length of that window in milliseconds. |
 
-`DEEPSEEK_API_KEY` is a Worker secret (`npx wrangler secret put DEEPSEEK_API_KEY`), never a file in
-the repo. The rate-limit counters live in D1 rather than process memory, because a Workers isolate
-does not outlive a request.
+These are plain Worker variables (`vars` in `wrangler.jsonc`), not secrets. The rate-limit counters
+live in D1 rather than process memory, because a Workers isolate does not outlive a request.
+`POST /api/plan` accepts the key as an optional `deepseekApiKey` field next to `interests`.
 
 The model only ever **reorders and explains** plans the solver already produced. It never invents
 courses, and every plan is re-validated server-side before it is returned. If the call fails, times
@@ -87,23 +92,37 @@ upstream surfaces as a solver-ranked result rather than a hung request.
 ## Architecture
 
 ```
-src/data/courses.ts          78-course catalog (source of truth for the seed)
-src/data/specializations.ts  six specializations + requirement groups + bucket weights
-src/data/catalog.ts          builds the Catalog from data; starter palette
-migrations/0001_init.sql     D1 schema (8 tables)
-migrations/0002_seed.sql     generated seed SQL
-src/lib/d1.ts                resolves the D1 binding
-src/lib/planner.ts           catalog loading, request sanitising, solver, validation
-src/lib/llm.ts               DeepSeek call, prompt, response parsing, solver fallback
-src/lib/interest-store.ts    localStorage persistence for a visitor's buckets
-src/app/api/catalog         GET  courses, specializations, starter palette, DeepSeek status
-src/app/api/plan            POST solve every specialization + rank with DeepSeek
-src/app/api/health          GET  row counts
+src/data/courses.ts            78-course catalog (source of truth for the seed)
+src/data/specializations.ts    six specializations + requirement groups + bucket weights
+src/data/catalog.ts            builds the Catalog from data; starter palette
+migrations/0001_init.sql       D1 schema (8 tables)
+migrations/0002_seed.sql       generated seed SQL
+src/lib/d1.server.ts           resolves the D1 binding from cloudflare:workers env
+src/lib/planner.ts             catalog loading, request sanitising, solver, validation
+src/lib/llm.server.ts          DeepSeek call, prompt, response parsing, solver fallback
+src/lib/rate-limit.server.ts   D1-backed fixed-window rate limiter
+src/lib/plan.server.ts         solve + validate + rank, shared by the server fn and /api/plan
+src/lib/catalog.functions.ts   getCatalog server fn + catalogQueryOptions (TanStack Query)
+src/lib/plan.functions.ts      createPlan server fn, called from the UI via useMutation
+src/lib/interest-store.ts      localStorage persistence for a visitor's buckets
+src/router.tsx                 router factory, per-request QueryClient, SSR query hydration
+src/routes/__root.tsx          document shell, head tags, devtools
+src/routes/index.tsx           the board; loader prefetches the catalog during SSR
+src/routes/api/catalog.ts      GET  courses, specializations, starter palette, DeepSeek status
+src/routes/api/plan.ts         POST solve every specialization + rank with DeepSeek
+src/routes/api/health.ts       GET  row counts
 ```
+
+The app runs on [TanStack Start](https://tanstack.com/start), deployed to Cloudflare Workers.
+Files ending in `.server.ts` are protected by Start's import protection, so D1 access and the
+DeepSeek key can never be bundled into the client. The catalog is fetched once by the index route's loader during SSR and hydrated into
+the TanStack Query cache, so the first HTML response is complete. Plan runs go through the
+`createPlan` server function; the `/api/*` routes remain as a plain HTTP contract for scripts and
+other clients, and share the same rate limiter and validation.
 
 Buckets are personal, so they never go in the shared database: the catalog endpoint returns a
 seeded starter palette, the browser stores the visitor's own assignments in `localStorage`, and
-`POST /api/plan` carries them in the request body. That body is validated against the catalog by
+each plan run carries them in the request body. That body is validated against the catalog by
 `sanitizeInterests()` — unknown course ids, unknown bucket names, and non-object payloads are
 dropped instead of trusted — and the route takes no other input.
 
@@ -116,7 +135,7 @@ slots are filled from the user's highest-weighted courses first, subject to the 
 
 Each finished plan is then handed to `validatePlan()`, which independently re-checks course count,
 credit total, duplicates, requirement satisfaction, foundational coverage, and the subject cap, and
-returns explicit errors instead of a plan. `npm run verify` runs this over seven different interest
+returns explicit errors instead of a plan. `pnpm verify` runs this over seven different interest
 distributions, including an all-78-courses-ranked case and a deliberately hostile one.
 
 ## Notes

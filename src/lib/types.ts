@@ -1,3 +1,5 @@
+import type { BUCKETS } from "@/data/specializations";
+
 export type BucketId = "high" | "medium" | "low";
 
 export interface Course {
@@ -63,10 +65,8 @@ export interface Plan {
 }
 
 export interface PlanResponse {
-  id: string;
   engine: "deepseek" | "solver";
   model: string | null;
-  /** True when DEEPSEEK_API_KEY is present, so the UI can prompt for a key. */
   deepseekConfigured: boolean;
   summary: string;
   warning: string | null;
@@ -76,4 +76,11 @@ export interface PlanResponse {
   interestCount: number;
   totalCourseCount: number;
   createdAt: string;
+}
+
+export interface CatalogPayload {
+  courses: Course[];
+  specializations: SpecSummary[];
+  buckets: typeof BUCKETS;
+  starterInterests: Record<string, BucketId>;
 }

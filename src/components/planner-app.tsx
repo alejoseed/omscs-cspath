@@ -1,5 +1,3 @@
-"use client";
-
 import {
   useCallback,
   useMemo,
@@ -7,10 +5,13 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { BucketBoard } from "@/components/bucket-board";
 import { CatalogBrowser } from "@/components/catalog-browser";
 import { PlanResults } from "@/components/plan-results";
 import { BUCKET_META } from "@/components/course-row";
+import { DeepseekKeyCard, useDeepseekKey } from "@/components/deepseek-key-card";
 import { cn } from "@/lib/utils";
 import {
   clearInterests,
@@ -19,42 +20,58 @@ import {
   saveInterests,
   subscribe,
 } from "@/lib/interest-store";
-import type { CatalogPayload } from "@/lib/catalog-server";
-import type { BucketId, PlanResponse, SpecSummary } from "@/lib/types";
+import { createPlan } from "@/lib/plan.functions";
+import type { BucketId, CatalogPayload, SpecSummary } from "@/lib/types";
 
 const MIN_RANKED = 4;
 
 export function PlannerApp({ payload }: { payload: CatalogPayload }) {
   const catalog = payload;
 
-  // Read the visitor's saved buckets during render. The server snapshot is null
-  // so the first paint matches the server markup exactly; React then re-renders
-  // with the stored value on the client.
   const saved = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const [draft, setDraft] = useState<Record<string, BucketId> | null>(null);
   const interests = draft ?? saved ?? payload.starterInterests;
 
-  const [result, setResult] = useState<PlanResponse | null>(null);
-  const [generating, setGenerating] = useState(false);
-  const [generateError, setGenerateError] = useState<string | null>(null);
   const [tab, setTab] = useState<"board" | "catalog">("board");
   const resultsRef = useRef<HTMLDivElement>(null);
+
+  const deepseekApiKey = useDeepseekKey();
+  const createPlanFn = useServerFn(createPlan);
+  const plan = useMutation({
+    mutationFn: (current: Record<string, BucketId>) =>
+      createPlanFn({
+        data: { interests: current, deepseekApiKey: deepseekApiKey ?? undefined },
+        signal: AbortSignal.timeout(45_000),
+      }),
+    onSuccess: () => {
+      requestAnimationFrame(() => {
+        resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    },
+  });
+  const result = plan.data ?? null;
+  const generating = plan.isPending;
+  const generateError = plan.error
+    ? plan.error.name === "TimeoutError" || plan.error.name === "AbortError"
+      ? "The plan request timed out. Try again — the solver runs in a few seconds."
+      : plan.error.message || "Could not generate plans."
+    : null;
+  const clearResult = plan.reset;
 
   const update = useCallback((next: Record<string, BucketId>) => {
     setDraft(next);
     saveInterests(next);
   }, []);
 
-  // Persist every change so a reload keeps the board exactly as it was.
   const assign = useCallback(
     (courseId: string, bucket: BucketId | null) => {
       const next = { ...interests };
       if (bucket === null) delete next[courseId];
       else next[courseId] = bucket;
       update(next);
-      setResult(null);
+      clearResult();
     },
-    [interests, update],
+    [interests, update, clearResult],
   );
 
   const clearBucket = useCallback(
@@ -64,49 +81,16 @@ export function PlannerApp({ payload }: { payload: CatalogPayload }) {
         if (b === bucket) delete next[id];
       }
       update(next);
-      setResult(null);
+      clearResult();
     },
-    [interests, update],
+    [interests, update, clearResult],
   );
 
   const resetAll = useCallback(() => {
     setDraft({});
-    setResult(null);
+    clearResult();
     clearInterests();
-  }, []);
-
-  const generate = useCallback(async () => {
-    setGenerating(true);
-    setGenerateError(null);
-    // A stalled request must surface as an error, not an endless "Solving…".
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 45_000);
-    try {
-      const res = await fetch("/api/plan", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ interests }),
-        signal: controller.signal,
-      });
-      const body = (await res.json()) as PlanResponse & { error?: string };
-      if (!res.ok) throw new Error(body.error ?? `Plan request failed (${res.status})`);
-      setResult(body);
-      requestAnimationFrame(() => {
-        resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    } catch (error) {
-      setGenerateError(
-        error instanceof Error
-          ? error.name === "AbortError"
-            ? "The plan request timed out. Try again — the solver runs in a few seconds."
-            : error.message
-          : "Could not generate plans.",
-      );
-    } finally {
-      clearTimeout(timeout);
-      setGenerating(false);
-    }
-  }, [interests]);
+  }, [clearResult]);
 
   const counts = useMemo(() => {
     const c: Record<BucketId, number> = { high: 0, medium: 0, low: 0 };
@@ -125,13 +109,13 @@ export function PlannerApp({ payload }: { payload: CatalogPayload }) {
             <p className="font-mono text-[9.5px] uppercase tracking-[0.18em] text-muted-foreground">
               Georgia Tech · Online MS in Computer Science
             </p>
-            <h1 className="mt-1 font-[family-name:var(--font-display)] text-[34px] leading-none tracking-tight sm:text-[42px]">
+            <h1 className="mt-1 font-display text-[34px] leading-none tracking-tight sm:text-[42px]">
               Path Builder
             </h1>
             <p className="mt-1.5 max-w-xl text-[12.5px] leading-relaxed text-muted-foreground">
               Rank every OMSCS course into three interest buckets. The solver builds a legal
               ten-course, thirty-credit plan for each specialization, then DeepSeek ranks the
-              paths for you.
+              paths for you with your own API key.
             </p>
           </div>
 
@@ -230,7 +214,7 @@ export function PlannerApp({ payload }: { payload: CatalogPayload }) {
             <button
               type="button"
               disabled={!ready || generating}
-              onClick={() => void generate()}
+              onClick={() => plan.mutate(interests)}
               className={cn(
                 "shrink-0 rounded-md px-4 py-2 font-mono text-[10.5px] uppercase tracking-widest transition-all",
                 ready
@@ -251,13 +235,11 @@ export function PlannerApp({ payload }: { payload: CatalogPayload }) {
         </div>
 
         <aside ref={resultsRef} className="min-w-0 lg:sticky lg:top-4 lg:self-start">
+          <DeepseekKeyCard />
           {result ? (
-            <PlanResults result={result} onReset={() => setResult(null)} />
+            <PlanResults result={result} onReset={clearResult} />
           ) : (
-            <EmptyResults
-              specializations={catalog.specializations}
-              deepseekConfigured={catalog.deepseekConfigured}
-            />
+            <EmptyResults specializations={catalog.specializations} />
           )}
         </aside>
       </div>
@@ -265,30 +247,12 @@ export function PlannerApp({ payload }: { payload: CatalogPayload }) {
   );
 }
 
-function EmptyResults({
-  specializations,
-  deepseekConfigured,
-}: {
-  specializations: SpecSummary[];
-  deepseekConfigured: boolean;
-}) {
+function EmptyResults({ specializations }: { specializations: SpecSummary[] }) {
   return (
     <div className="rounded-xl border border-border bg-card/40 p-4">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-          Ranked paths
-        </h2>
-        <span
-          className={cn(
-            "rounded-sm border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider",
-            deepseekConfigured
-              ? "border-high/40 bg-high/10 text-foreground/80"
-              : "border-border text-muted-foreground",
-          )}
-        >
-          {deepseekConfigured ? "DeepSeek ready" : "Solver only"}
-        </span>
-      </div>
+      <h2 className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+        Ranked paths
+      </h2>
       <p className="mt-2 text-[12.5px] leading-relaxed text-muted-foreground">
         Once you sort at least four courses, press{" "}
         <span className="font-medium text-foreground">Create path</span>. You get one legal plan
@@ -317,7 +281,7 @@ function EmptyResults({
           "Drag courses into Highly / Moderately / Barely interested.",
           "A constraint solver satisfies each specialization's real course rules.",
           "Free electives are filled from your highest-weighted remaining picks.",
-          "DeepSeek ranks the six plans and explains the trade-offs.",
+          "With your DeepSeek key, DeepSeek ranks the six plans and explains the trade-offs.",
         ].map((step, i) => (
           <div key={step} className="flex gap-2">
             <span className="font-mono text-[9px] text-muted-foreground tabular-nums">
@@ -328,18 +292,6 @@ function EmptyResults({
         ))}
       </div>
 
-      {!deepseekConfigured && (
-        <div className="mt-3 rounded-md border border-dashed border-border px-2.5 py-2">
-          <p className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground">
-            Optional
-          </p>
-          <p className="mt-1 text-[11px] leading-snug text-foreground/70">
-            Add <code className="rounded bg-muted px-1 font-mono text-[10px]">DEEPSEEK_API_KEY</code>{" "}
-            to <code className="rounded bg-muted px-1 font-mono text-[10px]">.env.local</code> and
-            every path comes back with DeepSeek&apos;s written recommendation.
-          </p>
-        </div>
-      )}
     </div>
   );
 }

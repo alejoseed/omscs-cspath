@@ -1,5 +1,3 @@
-"use client";
-
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { CourseRow, BUCKET_META } from "@/components/course-row";
@@ -37,8 +35,6 @@ export function BucketColumn({
         }
       }}
       onDragLeave={(event) => {
-        // dragleave fires when moving onto a child element, which would clear
-        // the highlight mid-drag. Only clear it when the pointer really left.
         const next = event.relatedTarget as Node | null;
         if (next && event.currentTarget.contains(next)) return;
         setOver(false);

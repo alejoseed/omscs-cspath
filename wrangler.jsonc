@@ -1,22 +1,18 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "omscs-path-builder",
-  "main": ".open-next/worker.js",
+  "main": "@tanstack/react-start/server-entry",
   "compatibility_date": "2026-11-16",
   "compatibility_flags": ["nodejs_compat"],
   "upload_source_maps": true,
   "observability": {
     "enabled": true
   },
-  "assets": {
-    "directory": ".open-next/assets",
-    "binding": "ASSETS"
-  },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "omscs-path-builder",
-      "database_id": "REPLACE_WITH_YOUR_DATABASE_ID"
+      "database_id": "18781f77-640d-4dc6-97b6-fc72a3e33382"
     }
   ],
   "vars": {
