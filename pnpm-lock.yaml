@@ -224,6 +224,9 @@ importers:
       '@cloudflare/vite-plugin':
         specifier: ^1.69.1
         version: 1.69.1(@types/node@20.19.43)(vite@8.3.8(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))(workerd@1.20261116.1)(wrangler@4.163.0(@types/node@20.19.43))
+      '@oxlint/plugins':
+        specifier: 1.94.0
+        version: 1.94.0
       '@tailwindcss/vite':
         specifier: ^4.3.5
         version: 4.3.5(vite@8.3.8(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
@@ -1028,6 +1031,10 @@ packages:
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [win32]
+
+  '@oxlint/plugins@1.94.0':
+    resolution: {integrity: sha512-YT6htikBOBQ00XDxZpRZLZ0anEDo7h9s4+YvjRU0/Ng/cLd0D6SZQ3tsms4g/GDer/z8UKlegC5iptEfyRXJcw==}
+    engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
 
   '@poppinss/colors@4.1.6':
     resolution: {integrity: sha512-H9xkIdFswbS8n1d6vmRd8+c10t2Qe+rZITbbDHHkQixH5+2x1FDGmi/0K+WgWiqQFKPSlIYB7jlH6Kpfn6Fleg==}
@@ -3810,6 +3817,8 @@ snapshots:
 
   '@oxlint/binding-win32-x64-msvc@1.94.0':
     optional: true
+
+  '@oxlint/plugins@1.94.0': {}
 
   '@poppinss/colors@4.1.6':
     dependencies:
