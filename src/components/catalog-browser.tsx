@@ -61,6 +61,8 @@ export function CatalogBrowser({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={`Search ${courses.length} courses, tags, descriptions…`}
+          aria-label="Search courses"
+          name="course-search"
           className="h-8 border-border/80 bg-background text-[12.5px]"
         />
         <div className="flex flex-wrap items-center gap-1">
@@ -83,6 +85,8 @@ export function CatalogBrowser({
           <select
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
+            aria-label="Filter by department"
+            name="department-filter"
             className="h-5 rounded-sm border border-border bg-transparent px-1 font-mono text-[9px] uppercase tracking-wider text-muted-foreground outline-none hover:text-foreground"
           >
             {subjects.map((s) => (
