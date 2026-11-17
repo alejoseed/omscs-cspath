@@ -6,6 +6,11 @@ import { CatalogBrowser } from "@/components/catalog-browser";
 import { PlanResults } from "@/components/plan-results";
 import { BUCKET_META } from "@/components/course-row";
 import { cn } from "@/lib/utils";
+import {
+  clearInterests,
+  readInterests,
+  writeInterests,
+} from "@/lib/interest-store";
 import type {
   BucketId,
   Course,
@@ -16,7 +21,7 @@ import type {
 interface CatalogPayload {
   courses: Course[];
   specializations: SpecSummary[];
-  interests: Record<string, BucketId>;
+  starterInterests: Record<string, BucketId>;
   deepseekConfigured: boolean;
 }
 
@@ -29,7 +34,7 @@ export function PlannerApp() {
   const [result, setResult] = useState<PlanResponse | null>(null);
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
-  const [pending, setPending] = useState<Set<string>>(new Set());
+  const [hydrated, setHydrated] = useState(false);
   const [tab, setTab] = useState<"board" | "catalog">("board");
   const resultsRef = useRef<HTMLDivElement>(null);
 
@@ -43,7 +48,10 @@ export function PlannerApp() {
       .then((data) => {
         if (cancelled) return;
         setCatalog(data);
-        setInterests(data.interests);
+        // Saved buckets win; otherwise start from the seeded example palette.
+        const saved = readInterests();
+        setInterests(saved ?? data.starterInterests);
+        setHydrated(true);
       })
       .catch((error: Error) => {
         if (!cancelled) setLoadError(error.message);
@@ -53,64 +61,50 @@ export function PlannerApp() {
     };
   }, []);
 
-  const assign = useCallback(
-    async (courseId: string, bucket: BucketId | null) => {
-      const previous = interests;
-      setInterests((current) => {
-        const next = { ...current };
-        if (bucket === null) delete next[courseId];
-        else next[courseId] = bucket;
-        return next;
-      });
-      setPending((p) => new Set(p).add(courseId));
-      setResult(null);
+  // Persist every change so a reload keeps the board exactly as it was.
+  useEffect(() => {
+    if (hydrated) writeInterests(interests);
+  }, [interests, hydrated]);
 
-      try {
-        const res = await fetch("/api/interests", {
-          method: "PUT",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ courseId, bucket }),
-        });
-        if (!res.ok) {
-          const body = (await res.json().catch(() => ({}))) as { error?: string };
-          throw new Error(body.error ?? `Save failed (${res.status})`);
-        }
-      } catch (error) {
-        // Roll back just this course, keeping any other edits that landed while
-        // the request was in flight.
-        setInterests((current) => {
-          const next = { ...current };
-          if (previous[courseId] === undefined) delete next[courseId];
-          else next[courseId] = previous[courseId];
-          return next;
-        });
-        setGenerateError(error instanceof Error ? error.message : "Could not save.");
-      } finally {
-        setPending((p) => {
-          const next = new Set(p);
-          next.delete(courseId);
-          return next;
-        });
-      }
-    },
-    [interests],
-  );
+  const assign = useCallback((courseId: string, bucket: BucketId | null) => {
+    setInterests((current) => {
+      const next = { ...current };
+      if (bucket === null) delete next[courseId];
+      else next[courseId] = bucket;
+      return next;
+    });
+    setResult(null);
+  }, []);
 
   const clearBucket = useCallback(
     (bucket: BucketId) => {
-      const ids = Object.entries(interests)
-        .filter(([, b]) => b === bucket)
-        .map(([id]) => id);
-      for (const id of ids) void assign(id, null);
+      setInterests((current) => {
+        const next = { ...current };
+        for (const [id, b] of Object.entries(next)) {
+          if (b === bucket) delete next[id];
+        }
+        return next;
+      });
+      setResult(null);
     },
-    [assign, interests],
+    [],
   );
+
+  const resetAll = useCallback(() => {
+    setInterests({});
+    setResult(null);
+    clearInterests();
+  }, []);
 
   const generate = useCallback(async () => {
     setGenerating(true);
     setGenerateError(null);
     try {
-      const res = await fetch("/api/plan", { method: "POST" });
+      const res = await fetch("/api/plan", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ interests }),
+      });
       const body = (await res.json()) as PlanResponse & { error?: string };
       if (!res.ok) throw new Error(body.error ?? `Plan request failed (${res.status})`);
       setResult(body);
@@ -124,7 +118,7 @@ export function PlannerApp() {
     } finally {
       setGenerating(false);
     }
-  }, []);
+  }, [interests]);
 
   const counts = useMemo(() => {
     const c: Record<BucketId, number> = { high: 0, medium: 0, low: 0 };
@@ -232,12 +226,7 @@ export function PlannerApp() {
             </div>
             <button
               type="button"
-              onClick={() => {
-                void fetch("/api/interests", { method: "DELETE" }).then(() => {
-                  setInterests({});
-                  setResult(null);
-                });
-              }}
+              onClick={resetAll}
               className="font-mono text-[9.5px] uppercase tracking-wider text-muted-foreground transition-colors hover:text-destructive"
             >
               Reset all
@@ -272,11 +261,9 @@ export function PlannerApp() {
                   : `Rank ${MIN_RANKED - ranked} more course${MIN_RANKED - ranked === 1 ? "" : "s"} to unlock`}
               </p>
               <p className="mt-0.5 text-[11px] text-muted-foreground">
-                {pending.size > 0
-                  ? "Saving…"
-                  : result
-                    ? "Buckets changed? Re-run to refresh every path."
-                    : "Every path is 10 courses / 30 credits and satisfies the official rules."}
+                {result
+                  ? "Buckets changed? Re-run to refresh every path."
+                  : "Every path is 10 courses / 30 credits and satisfies the official rules."}
               </p>
             </div>
             <button

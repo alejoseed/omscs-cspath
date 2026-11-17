@@ -41,7 +41,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# sqlite
+# sqlite (catalog db is created on first run)
 /data/*.db
 /data/*.db-wal
 /data/*.db-shm

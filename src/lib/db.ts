@@ -69,19 +69,12 @@ CREATE TABLE IF NOT EXISTS buckets (
   position INTEGER NOT NULL
 );
 
+-- One row per course the visitor has ranked. This is only the starter palette
+-- seeded on first boot; each visitor's own buckets live in their browser.
 CREATE TABLE IF NOT EXISTS course_interests (
   course_id  TEXT PRIMARY KEY REFERENCES courses(id) ON DELETE CASCADE,
   bucket_id  TEXT NOT NULL REFERENCES buckets(id) ON DELETE CASCADE,
   updated_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS plan_runs (
-  id           TEXT PRIMARY KEY,
-  created_at   TEXT NOT NULL,
-  interests    TEXT NOT NULL,
-  plans        TEXT NOT NULL,
-  narrative    TEXT,
-  engine       TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_requirement_courses_req
@@ -208,7 +201,7 @@ function seed(db: Db) {
  * A small starter palette so the first visit shows a working plan instead of an
  * empty canvas. Cleared the moment the user edits their buckets.
  */
-const EXAMPLE_INTERESTS: Record<string, string> = {
+export const EXAMPLE_INTERESTS: Record<string, string> = {
   "CS-7641": "high",
   "CS-7643": "high",
   "CS-6601": "high",

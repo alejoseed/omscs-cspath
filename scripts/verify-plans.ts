@@ -3,14 +3,14 @@
  * every specialization must produce exactly 10 distinct courses / 30 credits and
  * satisfy its official requirement set.
  *
- * Run with: npx tsx scripts/verify-plans.ts
+ * Run with: npm run verify:plans
  */
-import { getDb } from "../src/lib/db";
+import { getDb, EXAMPLE_INTERESTS } from "../src/lib/db";
 import {
   loadCatalog,
-  loadInterests,
   buildAllPlans,
   validatePlan,
+  sanitizeInterests,
   type Catalog,
   type BucketId,
 } from "../src/lib/planner";
@@ -25,6 +25,10 @@ for (const spec of catalog.specs) {
   const reqs = spec.requirements.map((r) => `${r.type}:${r.from.length}`).join(", ");
   console.log(`  ${spec.shortName.padEnd(9)} ${spec.credits}cr  ${reqs}`);
 }
+
+const starter = new Map(
+  Object.entries(EXAMPLE_INTERESTS) as [string, BucketId][],
+);
 
 function check(label: string, interests: Map<string, BucketId>) {
   const set = buildAllPlans(catalog, interests);
@@ -63,23 +67,25 @@ function check(label: string, interests: Map<string, BucketId>) {
         `${p.specShort}:${Math.round(p.fit * 100)}% (${p.bucketsUsed.high}H/${p.bucketsUsed.medium}M/${p.bucketsUsed.low}B)`,
     )
     .join("  ");
-  console.log(`\n${label} — ${set.interestCount}/${set.totalCourseCount} ranked, ${set.uncovered.length} uncovered`);
+  console.log(
+    `\n${label} — ${set.interestCount}/${set.totalCourseCount} ranked, ${set.uncovered.length} uncovered`,
+  );
   console.log(`  ${summary}`);
   return set;
 }
 
-// 1. The seeded example palette.
-check("seeded example", loadInterests(db));
+// 1. The starter palette every first-time visitor sees.
+check("starter palette", starter);
 
 // 2. Everything in Highly interested.
 check(
-  "all 76 highly interested",
+  "all courses highly interested",
   new Map(catalog.courses.map((c) => [c.id, "high" as BucketId])),
 );
 
 // 3. Everything barely interested.
 check(
-  "all 76 barely interested",
+  "all courses barely interested",
   new Map(catalog.courses.map((c) => [c.id, "low" as BucketId])),
 );
 
@@ -136,6 +142,43 @@ check(
     ["CS-6250", "low"],
   ]),
 );
+
+// 8. Every ISYE / MGT / PUBP course ranked highly — the 6-credit cap has to bite.
+check(
+  "non-CS-heavy",
+  new Map<string, BucketId>(
+    catalog.courses
+      .filter((c) => c.subject !== "CS" && c.subject !== "CSE")
+      .map((c) => [c.id, "high" as BucketId]),
+  ),
+);
+
+// --- request sanitising ------------------------------------------------------
+{
+  const cleaned = sanitizeInterests(
+    {
+      "CS-7641": "high",
+      "CS-7643": "medium",
+      "NOT-A-COURSE": "high",
+      "CS-6601": "extremely-interested",
+      "CS-6603": null,
+    },
+    catalog,
+  );
+  if (!cleaned) throw new Error("sanitizeInterests rejected a valid object");
+  if (cleaned.size !== 2) {
+    throw new Error(`expected 2 valid interests, got ${cleaned.size}`);
+  }
+  if (cleaned.get("CS-7641") !== "high" || cleaned.get("CS-7643") !== "medium") {
+    throw new Error("sanitizeInterests mangled valid entries");
+  }
+  for (const bad of [null, undefined, [], "high", 42]) {
+    if (sanitizeInterests(bad, catalog) !== null) {
+      throw new Error(`sanitizeInterests should reject ${JSON.stringify(bad)}`);
+    }
+  }
+  console.log("\nrequest sanitising — unknown courses and buckets rejected");
+}
 
 console.log("\nAll plan checks passed.");
 db.close();

@@ -199,6 +199,27 @@ export function loadInterests(db: Db): Map<string, BucketId> {
   return new Map(rows.map((r) => [r.courseId, r.bucketId]));
 }
 
+const VALID_BUCKETS = new Set<string>(BUCKETS.map((b) => b.id));
+
+/**
+ * Validates a client-supplied interest map against the catalog. Returns null if
+ * the shape is wrong, and otherwise a map containing only real course ids and
+ * real bucket ids. Bounded by the catalog size, so a huge payload is cheap.
+ */
+export function sanitizeInterests(
+  raw: unknown,
+  catalog: Catalog,
+): Map<string, BucketId> | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const result = new Map<string, BucketId>();
+  for (const [courseId, bucket] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof bucket !== "string" || !VALID_BUCKETS.has(bucket)) continue;
+    if (!catalog.byId.has(courseId)) continue;
+    result.set(courseId, bucket as BucketId);
+  }
+  return result;
+}
+
 const WEIGHT: Record<BucketId, number> = Object.fromEntries(
   BUCKETS.map((b) => [b.id, b.weight]),
 ) as Record<BucketId, number>;

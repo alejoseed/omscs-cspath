@@ -1,5 +1,12 @@
 import { getDb } from "@/lib/db";
-import { loadCatalog, loadInterests, buildAllPlans, validatePlan } from "@/lib/planner";
+import {
+  loadCatalog,
+  loadInterests,
+  buildAllPlans,
+  validatePlan,
+  sanitizeInterests,
+  type BucketId,
+} from "@/lib/planner";
 import { rankPlans, deepseekConfigured } from "@/lib/llm";
 import { checkRateLimit, clientKey, pruneRateWindows } from "@/lib/rate-limit";
 
@@ -20,7 +27,25 @@ export async function POST(request: Request) {
 
   const db = getDb();
   const catalog = loadCatalog(db);
-  const interests = loadInterests(db);
+
+  // Interests belong to the browser, so they arrive with the request. Anything
+  // that does not match a real course id and bucket is dropped rather than
+  // trusted, and the size of the payload is bounded by the catalog itself.
+  let body: unknown = null;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
+
+  const raw = (body as { interests?: unknown } | null)?.interests;
+  const interests = sanitizeInterests(raw, catalog);
+  if (!interests) {
+    return Response.json(
+      { error: "Body must be { interests: { [courseId]: 'high' | 'medium' | 'low' } }." },
+      { status: 400 },
+    );
+  }
 
   if (interests.size < 4) {
     return Response.json(
@@ -71,7 +96,7 @@ export async function POST(request: Request) {
 
   const narrativeFor = new Map(narrative.ranked.map((r) => [r.specId, r]));
 
-  const payload = {
+  return Response.json({
     engine: narrative.engine,
     model: narrative.model,
     deepseekConfigured: deepseekConfigured(),
@@ -83,34 +108,20 @@ export async function POST(request: Request) {
       headline: narrativeFor.get(plan.specId)?.headline ?? "",
       rationale: narrativeFor.get(plan.specId)?.rationale ?? "",
       watchOuts: narrativeFor.get(plan.specId)?.watchOuts ?? [],
-      coverage: plan.courses.filter((c) => c.bucket !== null).length,
+      coverage: plan.courses.filter((c: { bucket: BucketId | null }) => c.bucket !== null)
+        .length,
     })),
     coverage: set.coverage,
     uncovered: set.uncovered,
     interestCount: set.interestCount,
     totalCourseCount: set.totalCourseCount,
     createdAt: new Date().toISOString(),
-  };
+  });
+}
 
-  const id = `run_${Date.now().toString(36)}`;
-  db.prepare(
-    `INSERT INTO plan_runs (id, created_at, interests, plans, narrative, engine)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-  ).run(
-    id,
-    payload.createdAt,
-    JSON.stringify(Object.fromEntries(interests)),
-    JSON.stringify(payload.plans),
-    narrative.summary,
-    narrative.engine,
-  );
-
-  // Keep only the most recent runs so the file does not grow without bound.
-  db.prepare(
-    `DELETE FROM plan_runs WHERE id NOT IN (
-       SELECT id FROM plan_runs ORDER BY created_at DESC LIMIT 50
-     )`,
-  ).run();
-
-  return Response.json({ id, ...payload });
+/** The starter palette the UI shows on a first visit. */
+export async function GET() {
+  const db = getDb();
+  const interests = loadInterests(db);
+  return Response.json({ interests: Object.fromEntries(interests) });
 }

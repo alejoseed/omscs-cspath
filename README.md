@@ -9,8 +9,8 @@ ten-course degree plans — one per specialization — with DeepSeek explaining 
    OMS-Cybersecurity courses open to OMSCS students) live in a local SQLite database, along with
    foundational flags, department, and description/tag metadata.
 2. **Three interest buckets** — *Highly*, *Moderately*, *Barely interested*. Drag courses in, or
-   use the H / M / B buttons on any row. Every assignment is written to SQLite immediately, so the
-   board survives a reload.
+   use the H / M / B buttons on any row. Buckets are saved in your browser, so they survive a
+   reload and never collide with another visitor's choices.
 3. **Create path** builds a legal plan for **every one of the six specializations**. Each plan is
    exactly 10 courses / 30 credits, satisfies that specialization's published requirement groups,
    includes at least two foundational courses, and respects the 6-credit cap on non-CS/CSE subjects.
@@ -73,8 +73,7 @@ out, or returns unparseable JSON, the response falls back to the deterministic s
 surfaces the error in the UI rather than failing the request.
 
 `/api/plan` is rate limited (15 runs per minute per client by default) because each run spends
-DeepSeek tokens. The request body is never trusted: the route takes no input at all and reads the
-buckets from SQLite, and all SQL uses bound parameters.
+DeepSeek tokens. All SQL uses bound parameters.
 
 SQLite is a local file, so if the host's filesystem is read-only the app detects the failure and
 falls back to an in-memory database — the catalog still works, but bucket edits last only as long as
@@ -86,13 +85,19 @@ the process. Point `OMSCS_DB_PATH` at a writable volume to persist them.
 src/data/courses.ts          78-course catalog (source of truth for seeding)
 src/data/specializations.ts  six specializations + requirement groups + bucket weights
 src/lib/db.ts                SQLite schema, migrations, idempotent seeding
-src/lib/planner.ts           catalog loading, beam-search solver, plan validation
+src/lib/planner.ts           catalog loading, request sanitising, solver, validation
 src/lib/llm.ts               DeepSeek call, prompt, response parsing, solver fallback
-src/app/api/catalog         GET  courses, specializations, saved interests
-src/app/api/interests       PUT  assign/unassign a course; DELETE clear all
+src/lib/interest-store.ts    localStorage persistence for a visitor's buckets
+src/app/api/catalog         GET  courses, specializations, starter palette, DeepSeek status
 src/app/api/plan            POST solve every specialization + rank with DeepSeek
 src/app/api/health          GET  row counts
 ```
+
+Buckets are personal, so they never go in the shared database: the catalog endpoint returns a
+seeded starter palette, the browser stores the visitor's own assignments in `localStorage`, and
+`POST /api/plan` carries them in the request body. That body is validated against the catalog by
+`sanitizeInterests()` — unknown course ids, unknown bucket names, and non-object payloads are
+dropped instead of trusted — and the route takes no other input.
 
 ### How the solver works
 

@@ -8,7 +8,6 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const db = getDb();
   const catalog = loadCatalog(db);
-  const interests = loadInterests(db);
 
   return Response.json({
     courses: catalog.courses,
@@ -21,7 +20,9 @@ export async function GET() {
       url: s.url,
     })),
     buckets: BUCKETS,
-    interests: Object.fromEntries(interests),
+    // The starter palette each visitor begins with; their edits stay in the
+    // browser so one visitor never overwrites another's buckets.
+    starterInterests: Object.fromEntries(loadInterests(db)),
     deepseekConfigured: deepseekConfigured(),
   });
 }
