@@ -63,14 +63,14 @@ async function main() {
   process.env.DEEPSEEK_BASE_URL = "http://127.0.0.1:4599";
   process.env.DEEPSEEK_MODEL = "deepseek-chat";
 
-  const { getDb, EXAMPLE_INTERESTS } = await import("../src/lib/db");
-  const { loadCatalog, buildAllPlans } = await import("../src/lib/planner");
+  const { buildCatalogFromData, STARTER_INTERESTS } = await import("../src/data/catalog");
+  const { buildAllPlans } = await import("../src/lib/planner");
   const { rankPlans, deepseekConfigured } = await import("../src/lib/llm");
 
-  const db = getDb();
-  const catalog = loadCatalog(db);
+  
+  const catalog = buildCatalogFromData();
   const interests = new Map(
-    Object.entries(EXAMPLE_INTERESTS) as [string, "high" | "medium" | "low"][],
+    Object.entries(STARTER_INTERESTS) as [string, "high" | "medium" | "low"][],
   );
   const set = buildAllPlans(catalog, interests);
   const bucketMap = Object.fromEntries(interests);
@@ -126,7 +126,7 @@ async function main() {
   console.log(`  no key      : solver ranking, ${none.ranked.length} plans`);
 
   server.close();
-  db.close();
+
 }
 
 main().catch((error) => {

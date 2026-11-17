@@ -41,7 +41,13 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# sqlite (catalog db is created on first run)
+# local sqlite scratch (no longer used by the app)
 /data/*.db
 /data/*.db-wal
 /data/*.db-shm
+
+# cloudflare
+/.open-next/
+/.wrangler/
+cloudflare-env.d.ts
+.dev.vars

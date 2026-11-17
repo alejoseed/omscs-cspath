@@ -3,11 +3,11 @@ import { loadCatalogPayload } from "@/lib/catalog-server";
 
 export const dynamic = "force-dynamic";
 
-export default function Home() {
-  // The catalog is static data, so it is rendered server-side and shipped with
-  // the first response. No client fetch, no loading spinner, no failure mode
-  // where the board waits forever on a request that never resolves.
-  const payload = loadCatalogPayload();
+export default async function Home() {
+  // The catalog is seeded reference data, so it is rendered server-side and
+  // shipped with the first response: no client fetch, no loading spinner, and no
+  // failure mode where the board waits forever on a request that never resolves.
+  const payload = await loadCatalogPayload();
 
   return (
     <div className="paper-grain flex flex-1 flex-col">

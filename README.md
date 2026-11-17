@@ -6,8 +6,8 @@ ten-course degree plans — one per specialization — with DeepSeek explaining 
 ## What it does
 
 1. **All 78 courses** in the OMSCS catalog (the CS/CSE courses plus the OMS-Analytics and
-   OMS-Cybersecurity courses open to OMSCS students) live in a local SQLite database, along with
-   foundational flags, department, and description/tag metadata.
+   OMS-Cybersecurity courses open to OMSCS students) live in a **Cloudflare D1** database, along
+   with foundational flags, department, and description/tag metadata.
 2. **Three interest buckets** — *Highly*, *Moderately*, *Barely interested*. Drag courses in, or
    use the H / M / B buttons on any row. Buckets are saved in your browser, so they survive a
    reload and never collide with another visitor's choices.
@@ -31,22 +31,27 @@ ten-course degree plans — one per specialization — with DeepSeek explaining 
 
 Rules are transcribed from the OMSCS specialization pages and stored as data
 (`requirements`, `requirement_groups`, `requirement_courses`), not as code — the solver reads them
-from SQLite, so fixing a rule means editing one row.
+from D1, so fixing a rule means editing one row.
 
 ## Running it
 
 ```bash
 npm install
-cp .env.example .env.local   # add DEEPSEEK_API_KEY (optional but recommended)
-npm run dev                  # http://localhost:4311
+npx wrangler login
+npm run db:create            # then paste the id into wrangler.jsonc
+npm run db:migrate:remote    # schema + catalog
+npx wrangler secret put DEEPSEEK_API_KEY
+npm run deploy
 ```
 
-The database is created and seeded automatically on first request under `data/omscs.db`. Useful
-scripts:
+There is no local database file any more: the app reads D1 through the `DB` binding, both locally
+(in `npm run preview`) and in production. Full setup and troubleshooting live in
+[README-CLOUDFLARE.md](./README-CLOUDFLARE.md). Useful scripts:
 
 ```bash
-npm run db:seed      # re-seed the catalog (keeps your saved interests)
-npm run db:reset     # delete the database; next start recreates it
+npm run db:seed      # regenerate migrations/0002_seed.sql from src/data
+npm run db:migrate   # apply migrations to the local D1 emulator
+npm run preview      # run the Worker locally against local D1
 npm run verify       # prove every generated plan is legal, and exercise DeepSeek handling
 npm run typecheck
 npm run lint
@@ -64,8 +69,10 @@ DeepSeek is the only LLM provider in this app. It is called over its OpenAI-comp
 | `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | Override for a proxy or gateway. |
 | `PLAN_RATE_LIMIT` | `15` | Plan runs allowed per client per window. |
 | `PLAN_RATE_WINDOW_MS` | `60000` | Length of that window in milliseconds. |
-| `OMSCS_DB_PATH` | `./data/omscs.db` | SQLite file location. |
-| `OMSCS_READ_ONLY_FS` | unset | Force the in-memory fallback database. |
+
+`DEEPSEEK_API_KEY` is a Worker secret (`npx wrangler secret put DEEPSEEK_API_KEY`), never a file in
+the repo. The rate-limit counters live in D1 rather than process memory, because a Workers isolate
+does not outlive a request.
 
 The model only ever **reorders and explains** plans the solver already produced. It never invents
 courses, and every plan is re-validated server-side before it is returned. If the call fails, times
@@ -73,18 +80,19 @@ out, or returns unparseable JSON, the response falls back to the deterministic s
 surfaces the error in the UI rather than failing the request.
 
 `/api/plan` is rate limited (15 runs per minute per client by default) because each run spends
-DeepSeek tokens. All SQL uses bound parameters.
-
-SQLite is a local file, so if the host's filesystem is read-only the app detects the failure and
-falls back to an in-memory database — the catalog still works, but bucket edits last only as long as
-the process. Point `OMSCS_DB_PATH` at a writable volume to persist them.
+DeepSeek tokens. The counters are rows in D1, incremented atomically by the INSERT. All SQL uses
+bound parameters. Both the DeepSeek call and the plan request have hard timeouts, so a stalled
+upstream surfaces as a solver-ranked result rather than a hung request.
 
 ## Architecture
 
 ```
-src/data/courses.ts          78-course catalog (source of truth for seeding)
+src/data/courses.ts          78-course catalog (source of truth for the seed)
 src/data/specializations.ts  six specializations + requirement groups + bucket weights
-src/lib/db.ts                SQLite schema, migrations, idempotent seeding
+src/data/catalog.ts          builds the Catalog from data; starter palette
+migrations/0001_init.sql     D1 schema (8 tables)
+migrations/0002_seed.sql     generated seed SQL
+src/lib/d1.ts                resolves the D1 binding
 src/lib/planner.ts           catalog loading, request sanitising, solver, validation
 src/lib/llm.ts               DeepSeek call, prompt, response parsing, solver fallback
 src/lib/interest-store.ts    localStorage persistence for a visitor's buckets

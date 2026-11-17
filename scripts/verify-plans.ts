@@ -1,22 +1,22 @@
 /**
- * Verifies the planner against the real catalog: for a range of interest mixes,
- * every specialization must produce exactly 10 distinct courses / 30 credits and
- * satisfy its official requirement set.
+ * Verifies the planner against the real catalog, with no database involved:
+ * buildCatalogFromData() is the same data D1 is seeded from, so these checks
+ * cover what the deployed app will actually run.
+ *
+ * Every specialization must produce exactly 10 distinct courses / 30 credits and
+ * satisfy its official requirement set, for a range of interest mixes.
  *
  * Run with: npm run verify:plans
  */
-import { getDb, EXAMPLE_INTERESTS } from "../src/lib/db";
+import { buildCatalogFromData, STARTER_INTERESTS } from "../src/data/catalog";
 import {
-  loadCatalog,
   buildAllPlans,
   validatePlan,
   sanitizeInterests,
-  type Catalog,
   type BucketId,
 } from "../src/lib/planner";
 
-const db = getDb();
-const catalog: Catalog = loadCatalog(db);
+const catalog = buildCatalogFromData();
 
 console.log(
   `Catalog: ${catalog.courses.length} courses, ${catalog.specs.length} specializations`,
@@ -27,7 +27,7 @@ for (const spec of catalog.specs) {
 }
 
 const starter = new Map(
-  Object.entries(EXAMPLE_INTERESTS) as [string, BucketId][],
+  Object.entries(STARTER_INTERESTS) as [string, BucketId][],
 );
 
 function check(label: string, interests: Map<string, BucketId>) {
@@ -143,7 +143,7 @@ check(
   ]),
 );
 
-// 8. Every ISYE / MGT / PUBP course ranked highly — the 6-credit cap has to bite.
+// 8. Every non-CS/CSE course ranked highly — the 6-credit cap has to bite.
 check(
   "non-CS-heavy",
   new Map<string, BucketId>(
@@ -181,4 +181,3 @@ check(
 }
 
 console.log("\nAll plan checks passed.");
-db.close();

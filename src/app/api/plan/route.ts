@@ -1,4 +1,4 @@
-import { getDb } from "@/lib/db";
+import { getD1 } from "@/lib/d1";
 import {
   loadCatalog,
   loadInterests,
@@ -14,8 +14,9 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
-  pruneRateWindows();
-  const limit = checkRateLimit(clientKey(request));
+  const db = getD1();
+  await pruneRateWindows(db);
+  const limit = await checkRateLimit(db, clientKey(request));
   if (!limit.allowed) {
     return Response.json(
       {
@@ -25,8 +26,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const db = getDb();
-  const catalog = loadCatalog(db);
+  const catalog = await loadCatalog(db);
 
   // Interests belong to the browser, so they arrive with the request. Anything
   // that does not match a real course id and bucket is dropped rather than
@@ -121,7 +121,6 @@ export async function POST(request: Request) {
 
 /** The starter palette the UI shows on a first visit. */
 export async function GET() {
-  const db = getDb();
-  const interests = loadInterests(db);
+  const interests = await loadInterests(getD1());
   return Response.json({ interests: Object.fromEntries(interests) });
 }

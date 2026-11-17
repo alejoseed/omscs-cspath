@@ -1,4 +1,4 @@
-import { getDb } from "@/lib/db";
+import { getD1 } from "@/lib/d1";
 import { loadCatalog, loadInterests } from "@/lib/planner";
 import { deepseekConfigured } from "@/lib/llm";
 import { BUCKETS } from "@/data/specializations";
@@ -14,12 +14,15 @@ export interface CatalogPayload {
 
 /**
  * Loads everything the board needs on the server, so the page is complete in the
- * first HTML response. The catalog is static data derived from src/data, so
- * there is no reason to make the browser fetch it and sit on a spinner.
+ * first HTML response. The catalog is static data seeded into D1, so there is no
+ * reason to make the browser fetch it and sit on a spinner.
  */
-export function loadCatalogPayload(): CatalogPayload {
-  const db = getDb();
-  const catalog = loadCatalog(db);
+export async function loadCatalogPayload(): Promise<CatalogPayload> {
+  const db = getD1();
+  const [catalog, interests] = await Promise.all([
+    loadCatalog(db),
+    loadInterests(db),
+  ]);
 
   return {
     courses: catalog.courses,
@@ -32,7 +35,7 @@ export function loadCatalogPayload(): CatalogPayload {
       url: s.url,
     })),
     buckets: BUCKETS,
-    starterInterests: Object.fromEntries(loadInterests(db)) as Record<string, BucketId>,
+    starterInterests: Object.fromEntries(interests) as Record<string, BucketId>,
     deepseekConfigured: deepseekConfigured(),
   };
 }

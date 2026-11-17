@@ -1,4 +1,4 @@
-import type { Db } from "@/lib/db";
+import type { D1Database } from "@/lib/d1";
 import { BUCKETS, UNASSIGNED_WEIGHT } from "@/data/specializations";
 
 export interface Course {
@@ -98,16 +98,17 @@ export function countsTowardCap(courseId: string): boolean {
   return subject !== "CS" && subject !== "CSE";
 }
 
-export function loadCatalog(db: Db): Catalog {
-  const courseRows = db
+export async function loadCatalog(db: D1Database): Promise<Catalog> {
+  const courseQuery = await db
     .prepare(
       `SELECT id, subject, number, title, credits, foundational, admin, description, tags
        FROM courses ORDER BY subject, number`,
     )
-    .all() as (Omit<Course, "foundational" | "tags"> & {
-    foundational: number;
-    tags: string;
-  })[];
+    .all<Omit<Course, "foundational" | "tags"> & {
+      foundational: number;
+      tags: string;
+    }>();
+  const courseRows = courseQuery.results;
 
   const courses: Course[] = courseRows.map((row) => ({
     ...row,
@@ -116,40 +117,42 @@ export function loadCatalog(db: Db): Catalog {
   }));
   const byId = new Map(courses.map((c) => [c.id, c]));
 
-  const specRows = db
+  const specQuery = await db
     .prepare(
       `SELECT id, name, short_name AS shortName, credits, blurb, url, flavour AS flavourTags
        FROM specializations`,
     )
-    .all() as (Omit<SpecDef, "requirements" | "flavourTags"> & {
-    flavourTags: string;
-  })[];
+    .all<Omit<SpecDef, "requirements" | "flavourTags"> & { flavourTags: string }>();
+  const specRows = specQuery.results;
 
-  const reqRows = db
+  const reqQuery = await db
     .prepare(
       `SELECT id, specialization_id AS specId, kind, label, n
        FROM requirements ORDER BY specialization_id, position`,
     )
-    .all() as {
-    id: string;
-    specId: string;
-    kind: ReqDef["type"];
-    label: string;
-    n: number | null;
-  }[];
+    .all<{
+      id: string;
+      specId: string;
+      kind: ReqDef["type"];
+      label: string;
+      n: number | null;
+    }>();
+  const reqRows = reqQuery.results;
 
-  const reqCourseRows = db
+  const reqCourseQuery = await db
     .prepare(
       `SELECT requirement_id AS reqId, group_id AS groupId, course_id AS courseId
        FROM requirement_courses ORDER BY requirement_id, position`,
     )
-    .all() as { reqId: string; groupId: string | null; courseId: string }[];
+    .all<{ reqId: string; groupId: string | null; courseId: string }>();
+  const reqCourseRows = reqCourseQuery.results;
 
-  const groupRows = db
+  const groupQuery = await db
     .prepare(
       `SELECT id, requirement_id AS reqId, label FROM requirement_groups ORDER BY requirement_id, position`,
     )
-    .all() as { id: string; reqId: string; label: string }[];
+    .all<{ id: string; reqId: string; label: string }>();
+  const groupRows = groupQuery.results;
 
   const specs: SpecDef[] = specRows.map((s) => {
     const requirements = reqRows
@@ -192,11 +195,13 @@ export function loadCatalog(db: Db): Catalog {
   return { courses, byId, specs };
 }
 
-export function loadInterests(db: Db): Map<string, BucketId> {
-  const rows = db
+export async function loadInterests(
+  db: D1Database,
+): Promise<Map<string, BucketId>> {
+  const query = await db
     .prepare("SELECT course_id AS courseId, bucket_id AS bucketId FROM course_interests")
-    .all() as { courseId: string; bucketId: BucketId }[];
-  return new Map(rows.map((r) => [r.courseId, r.bucketId]));
+    .all<{ courseId: string; bucketId: BucketId }>();
+  return new Map(query.results.map((r) => [r.courseId, r.bucketId]));
 }
 
 const VALID_BUCKETS = new Set<string>(BUCKETS.map((b) => b.id));
