@@ -1,12 +1,5 @@
 import type { D1Database } from "@/lib/d1.server";
 
-/**
- * Fixed-window rate limiter for the expensive /api/plan route. It is stored in
- * D1 rather than process memory: a Workers isolate is not long-lived, so an
- * in-memory counter would reset unpredictably and let someone burn the DeepSeek
- * key owner's credits.
- */
-
 const LIMIT = Number(process.env.PLAN_RATE_LIMIT ?? 15);
 const WINDOW_MS = Number(process.env.PLAN_RATE_WINDOW_MS ?? 60_000);
 
@@ -32,7 +25,6 @@ export async function checkRateLimit(
   const windowStart = Math.floor(now / WINDOW_MS) * WINDOW_MS;
   const id = `${key}:${windowStart}`;
 
-  // Atomic increment; a fresh window starts at 0 because the row id changes.
   const row = await db
     .prepare(
       `INSERT INTO rate_limits (id, window_start, count)
@@ -56,7 +48,6 @@ export async function checkRateLimit(
   return { allowed: true, remaining: LIMIT - count, retryAfterSeconds: 0 };
 }
 
-/** Drops windows that have already elapsed so the table stays tiny. */
 export async function pruneRateWindows(db: D1Database): Promise<void> {
   const cutoff = Date.now() - WINDOW_MS * 10;
   await db

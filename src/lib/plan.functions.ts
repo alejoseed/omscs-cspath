@@ -4,11 +4,6 @@ import { generatePlans } from "@/lib/plan.server";
 import { clientKey } from "@/lib/rate-limit.server";
 import type { BucketId } from "@/lib/types";
 
-/**
- * Runs the solver and DeepSeek ranking for the visitor's buckets. The shape is
- * only checked loosely here; generatePlans drops anything that is not a real
- * course id and bucket.
- */
 export const createPlan = createServerFn({ method: "POST" })
   .validator((data: { interests: Record<string, BucketId> }) => data)
   .handler(async ({ data }) => {

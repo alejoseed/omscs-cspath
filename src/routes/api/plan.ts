@@ -4,10 +4,6 @@ import { loadInterests } from "@/lib/planner";
 import { generatePlans } from "@/lib/plan.server";
 import { clientKey } from "@/lib/rate-limit.server";
 
-/**
- * Raw HTTP contract for plan runs. The app itself calls the createPlan server
- * function; this stays for scripts and other clients.
- */
 export const Route = createFileRoute("/api/plan")({
   server: {
     handlers: {
@@ -31,7 +27,6 @@ export const Route = createFileRoute("/api/plan")({
         return Response.json(outcome.data);
       },
 
-      /** The starter palette the UI shows on a first visit. */
       GET: async () => {
         const interests = await loadInterests(getD1());
         return Response.json({ interests: Object.fromEntries(interests) });

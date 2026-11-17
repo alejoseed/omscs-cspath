@@ -23,7 +23,6 @@ export interface SpecializationSeed {
   blurb: string;
   url: string;
   requirements: Requirement[];
-  /** Courses that only count as electives; used for tie-breaking flavour. */
   flavourTags: string[];
 }
 
@@ -83,11 +82,6 @@ const ML_ELECTIVES = [
   "ISYE-6420",
 ];
 
-/**
- * The six specializations offered by OMSCS, with the online-offered courses that
- * satisfy each requirement. Rules mirror the OMSCS specialization pages (only
- * courses actually listed as offered online are included).
- */
 export const SPECIALIZATIONS: SpecializationSeed[] = [
   {
     id: "ai",

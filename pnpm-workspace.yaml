@@ -1,4 +1,3 @@
-# pnpm only runs dependency build scripts that are approved here.
 allowBuilds:
   esbuild: true
   workerd: true

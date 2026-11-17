@@ -4,19 +4,10 @@ const KEY = "omscs-path-builder:interests:v1";
 
 const VALID = new Set<BucketId>(["high", "medium", "low"]);
 
-/**
- * Bucket assignments live in localStorage, not on the server: a plan is
- * personal, and a shared table would let one visitor overwrite another's
- * choices. Exposed as a tiny external store so React can read it with
- * useSyncExternalStore during render rather than syncing it in an effect.
- */
-
 type Interests = Record<string, BucketId>;
 
 const listeners = new Set<() => void>();
 
-// useSyncExternalStore requires a stable reference for an unchanged snapshot,
-// so the parsed object is cached against the raw string it came from.
 let cachedRaw: string | null | undefined;
 let cachedValue: Interests | null = null;
 
@@ -46,7 +37,6 @@ function readRaw(): string | null {
   }
 }
 
-/** Saved buckets, or null when this visitor has never saved anything. */
 export function getSnapshot(): Interests | null {
   const raw = readRaw();
   if (raw !== cachedRaw) {
@@ -77,14 +67,11 @@ export function saveInterests(interests: Interests): void {
   try {
     window.localStorage.setItem(KEY, JSON.stringify(interests));
   } catch {
-    // Storage can be full or blocked (private mode); the board still works for
-    // this session, it just will not survive a reload.
   }
   cachedRaw = undefined;
   for (const listener of listeners) listener();
 }
 
-/** Empties the board. Distinct from "never saved", so a reload stays empty. */
 export function clearInterests(): void {
   saveInterests({});
 }

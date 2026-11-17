@@ -2,11 +2,6 @@ import { COURSES } from "@/data/courses";
 import { SPECIALIZATIONS } from "@/data/specializations";
 import type { Catalog, Course, SpecDef } from "@/lib/planner";
 
-/**
- * Builds the catalog straight from src/data, with no database involved. D1 is
- * seeded from this same data, so tests can assert on the solver without needing
- * a live database, and `scripts/generate-seed.ts` emits the matching SQL.
- */
 export function buildCatalogFromData(): Catalog {
   const courses: Course[] = COURSES.map((c) => ({
     id: c.id,
@@ -48,10 +43,6 @@ export function buildCatalogFromData(): Catalog {
   };
 }
 
-/**
- * The palette a first-time visitor starts from. It is only a starting point:
- * each visitor's edits are stored in their own browser.
- */
 export const STARTER_INTERESTS: Record<string, "high" | "medium" | "low"> = {
   "CS-7641": "high",
   "CS-7643": "high",

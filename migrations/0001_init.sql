@@ -1,7 +1,3 @@
--- OMSCS Path Builder schema for Cloudflare D1.
--- The catalog and specialization rules are seeded from src/data via
--- `npm run db:seed`, so this file only defines structure.
-
 CREATE TABLE IF NOT EXISTS courses (
   id            TEXT PRIMARY KEY,
   subject       TEXT NOT NULL,
@@ -55,8 +51,6 @@ CREATE TABLE IF NOT EXISTS buckets (
   position INTEGER NOT NULL
 );
 
--- The starter palette shown on a first visit. Each visitor's own buckets live
--- in their browser, so this table is reference data, not personal state.
 CREATE TABLE IF NOT EXISTS course_interests (
   course_id  TEXT PRIMARY KEY REFERENCES courses(id) ON DELETE CASCADE,
   bucket_id  TEXT NOT NULL REFERENCES buckets(id) ON DELETE CASCADE,
@@ -68,8 +62,6 @@ CREATE INDEX IF NOT EXISTS idx_requirement_courses_req
 CREATE INDEX IF NOT EXISTS idx_requirements_spec
   ON requirements(specialization_id);
 
--- Fixed-window counters for /api/plan. D1 is the only durable place to keep
--- these, since a Workers isolate does not outlive a request.
 CREATE TABLE IF NOT EXISTS rate_limits (
   id           TEXT PRIMARY KEY,
   window_start INTEGER NOT NULL,

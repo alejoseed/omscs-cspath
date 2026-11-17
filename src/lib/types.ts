@@ -67,7 +67,6 @@ export interface Plan {
 export interface PlanResponse {
   engine: "deepseek" | "solver";
   model: string | null;
-  /** True when DEEPSEEK_API_KEY is present, so the UI can prompt for a key. */
   deepseekConfigured: boolean;
   summary: string;
   warning: string | null;

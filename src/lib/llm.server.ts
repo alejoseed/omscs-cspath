@@ -1,12 +1,5 @@
 import type { Plan } from "@/lib/planner";
 
-/**
- * DeepSeek is the only LLM provider this app talks to. It exposes an
- * OpenAI-compatible /chat/completions endpoint, so no SDK is needed.
- * https://api-docs.deepseek.com
- */
-// Read per call rather than at module scope, so the server picks up the
-// environment it is actually running with.
 const baseUrl = () => process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com";
 const model = () => process.env.DEEPSEEK_MODEL ?? "deepseek-chat";
 const timeoutMs = () => Number(process.env.DEEPSEEK_TIMEOUT_MS ?? 25_000);
@@ -118,8 +111,6 @@ async function callDeepSeek(system: string, user: string): Promise<string> {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) throw new Error("DEEPSEEK_API_KEY is not set.");
 
-  // Hard cap so a stalled upstream can never hold the route open; the solver
-  // ranking is a perfectly good result if DeepSeek is slow.
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs());
 
@@ -166,7 +157,6 @@ export function deepseekConfigured(): boolean {
   return Boolean(process.env.DEEPSEEK_API_KEY);
 }
 
-/** Deterministic ranking used when no key is set or the call fails. */
 export function solverNarrative(plans: Plan[], totalRanked: number): Narrative {
   const ranked: RankedPlan[] = plans.map((p, i) => {
     const high = p.courses.filter((c) => c.bucket === "high");
@@ -247,7 +237,6 @@ export async function rankPlans(
     const ranked = parseNarrative(raw, plans);
     if (!ranked) throw new Error("DeepSeek returned a ranking that could not be parsed.");
 
-    // Any plan the model skipped keeps a solver-derived entry at the end.
     for (const p of plans.filter((x) => !ranked.some((r) => r.specId === x.specId))) {
       ranked.push({
         specId: p.specId,

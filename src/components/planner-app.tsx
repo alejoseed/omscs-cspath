@@ -27,9 +27,6 @@ const MIN_RANKED = 4;
 export function PlannerApp({ payload }: { payload: CatalogPayload }) {
   const catalog = payload;
 
-  // Read the visitor's saved buckets during render. The server snapshot is null
-  // so the first paint matches the server markup exactly; React then re-renders
-  // with the stored value on the client.
   const saved = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const [draft, setDraft] = useState<Record<string, BucketId> | null>(null);
   const interests = draft ?? saved ?? payload.starterInterests;
@@ -42,7 +39,6 @@ export function PlannerApp({ payload }: { payload: CatalogPayload }) {
     mutationFn: (current: Record<string, BucketId>) =>
       createPlanFn({
         data: { interests: current },
-        // A stalled request must surface as an error, not an endless "Solving…".
         signal: AbortSignal.timeout(45_000),
       }),
     onSuccess: () => {
@@ -58,7 +54,6 @@ export function PlannerApp({ payload }: { payload: CatalogPayload }) {
       ? "The plan request timed out. Try again — the solver runs in a few seconds."
       : plan.error.message || "Could not generate plans."
     : null;
-  // Any edit to the buckets makes the current result stale, so it is dropped.
   const clearResult = plan.reset;
 
   const update = useCallback((next: Record<string, BucketId>) => {
@@ -66,7 +61,6 @@ export function PlannerApp({ payload }: { payload: CatalogPayload }) {
     saveInterests(next);
   }, []);
 
-  // Persist every change so a reload keeps the board exactly as it was.
   const assign = useCallback(
     (courseId: string, bucket: BucketId | null) => {
       const next = { ...interests };
@@ -95,7 +89,6 @@ export function PlannerApp({ payload }: { payload: CatalogPayload }) {
     clearResult();
     clearInterests();
   }, [clearResult]);
-
 
   const counts = useMemo(() => {
     const c: Record<BucketId, number> = { high: 0, medium: 0, low: 0 };

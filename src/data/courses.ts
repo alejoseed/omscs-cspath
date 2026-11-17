@@ -12,12 +12,6 @@ export interface CourseSeed {
   tags: string[];
 }
 
-/**
- * Every course listed on the OMSCS "Current Courses" page, plus the OMS-A / OMS-C
- * courses that are open to OMSCS students. Foundational courses are marked with
- * an asterisk on that page; the list below mirrors it.
- * Source: https://omscs.gatech.edu/current-courses
- */
 export const COURSES: CourseSeed[] = [
   {
     id: "CS-6035",

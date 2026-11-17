@@ -4,11 +4,6 @@ import { deepseekConfigured } from "@/lib/llm.server";
 import { BUCKETS } from "@/data/specializations";
 import type { BucketId, CatalogPayload } from "@/lib/types";
 
-/**
- * Loads everything the board needs on the server, so the page is complete in the
- * first HTML response. The catalog is static data seeded into D1, so there is no
- * reason to make the browser fetch it and sit on a spinner.
- */
 export async function loadCatalogPayload(): Promise<CatalogPayload> {
   const db = getD1();
   const [catalog, interests] = await Promise.all([

@@ -4,9 +4,6 @@ import { PlannerApp } from "@/components/planner-app";
 import { catalogQueryOptions } from "@/lib/catalog.functions";
 
 export const Route = createFileRoute("/")({
-  // The catalog is static data, so it is loaded during SSR and shipped with the
-  // first response. No client fetch, no loading spinner, no failure mode where
-  // the board waits forever on a request that never resolves.
   loader: ({ context }) => context.queryClient.query(catalogQueryOptions),
   component: Home,
 });

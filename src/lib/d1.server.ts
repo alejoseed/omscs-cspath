@@ -1,10 +1,5 @@
 import { env } from "cloudflare:workers";
 
-/**
- * Cloudflare D1 binding. D1 has no synchronous driver, so every query in this
- * app is awaited; the planner loads the catalog once per request and works on
- * it in memory from there.
- */
 export interface D1Result<T = Record<string, unknown>> {
   results: T[];
   success: boolean;

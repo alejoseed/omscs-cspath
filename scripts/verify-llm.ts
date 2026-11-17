@@ -1,13 +1,3 @@
-/**
- * Exercises the DeepSeek ranking path end-to-end against a local
- * OpenAI-compatible mock, without needing a real key. Confirms:
- *   - the prompt carries the student's buckets and every candidate plan
- *   - a valid model response reorders the plans
- *   - a malformed response falls back to the solver instead of throwing
- *   - an HTTP error falls back to the solver
- *
- * Run with: npx tsx scripts/verify-llm.ts
- */
 import http from "node:http";
 
 type Mode = "good" | "garbage" | "error";
@@ -75,7 +65,6 @@ async function main() {
   const set = buildAllPlans(catalog, interests);
   const bucketMap = Object.fromEntries(interests);
 
-  // --- good response --------------------------------------------------------
   const good = await rankPlans(set.plans, bucketMap);
   assert(good.engine === "deepseek", `expected deepseek engine, got ${good.engine}`);
   assert(good.model === "deepseek-chat", `expected deepseek-chat, got ${good.model}`);
@@ -95,14 +84,12 @@ async function main() {
   assert(prompt.includes("CS-7641"), "prompt missing ranked course ids");
   assert((prompt.match(/specId:/g) ?? []).length === 6, "prompt missing candidate plans");
 
-  // --- malformed response ---------------------------------------------------
   mode = "garbage";
   const bad = await rankPlans(set.plans, bucketMap);
   assert(bad.engine === "solver", `expected solver fallback, got ${bad.engine}`);
   assert(typeof bad.error === "string", "expected an error note on fallback");
   assert(bad.ranked.length === 6, "fallback must still rank every plan");
 
-  // --- HTTP error (bad key) -------------------------------------------------
   mode = "error";
   const failed = await rankPlans(set.plans, bucketMap);
   assert(failed.engine === "solver", `expected solver fallback, got ${failed.engine}`);
@@ -111,7 +98,6 @@ async function main() {
     `expected the 401 to surface, got ${failed.error}`,
   );
 
-  // --- no key at all --------------------------------------------------------
   delete process.env.DEEPSEEK_API_KEY;
   assert(!deepseekConfigured(), "configured() should be false without a key");
   const none = await rankPlans(set.plans, bucketMap);

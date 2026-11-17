@@ -20,11 +20,6 @@ export type PlanFailure = {
 
 export type PlanOutcome = { ok: true; data: PlanResponse } | PlanFailure;
 
-/**
- * Solves, validates and ranks a plan for every specialization. Shared by the
- * createPlan server function the UI calls and the raw /api/plan endpoint, so
- * both enforce the same rate limit and input rules.
- */
 export async function generatePlans(rawInterests: unknown, clientKey: string): Promise<PlanOutcome> {
   const db = getD1();
   await pruneRateWindows(db);
@@ -40,9 +35,6 @@ export async function generatePlans(rawInterests: unknown, clientKey: string): P
 
   const catalog = await loadCatalog(db);
 
-  // Interests belong to the browser, so they arrive with the request. Anything
-  // that does not match a real course id and bucket is dropped rather than
-  // trusted, and the size of the payload is bounded by the catalog itself.
   const interests = sanitizeInterests(rawInterests, catalog);
   if (!interests) {
     return {
@@ -87,7 +79,6 @@ export async function generatePlans(rawInterests: unknown, clientKey: string): P
     Object.fromEntries(interests) as Record<string, string>,
   );
 
-  // Merge the model's ordering onto the solver's plans.
   const bySpec = new Map(set.plans.map((p) => [p.specId, p]));
   const ordered = narrative.ranked
     .map((r) => bySpec.get(r.specId))

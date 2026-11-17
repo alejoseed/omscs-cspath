@@ -1,13 +1,3 @@
-/**
- * Verifies the planner against the real catalog, with no database involved:
- * buildCatalogFromData() is the same data D1 is seeded from, so these checks
- * cover what the deployed app will actually run.
- *
- * Every specialization must produce exactly 10 distinct courses / 30 credits and
- * satisfy its official requirement set, for a range of interest mixes.
- *
- * Run with: npm run verify:plans
- */
 import { buildCatalogFromData, STARTER_INTERESTS } from "../src/data/catalog";
 import {
   buildAllPlans,
@@ -74,22 +64,18 @@ function check(label: string, interests: Map<string, BucketId>) {
   return set;
 }
 
-// 1. The starter palette every first-time visitor sees.
 check("starter palette", starter);
 
-// 2. Everything in Highly interested.
 check(
   "all courses highly interested",
   new Map(catalog.courses.map((c) => [c.id, "high" as BucketId])),
 );
 
-// 3. Everything barely interested.
 check(
   "all courses barely interested",
   new Map(catalog.courses.map((c) => [c.id, "low" as BucketId])),
 );
 
-// 4. A graphics-flavoured palette.
 check(
   "graphics-leaning",
   new Map<string, BucketId>([
@@ -102,7 +88,6 @@ check(
   ]),
 );
 
-// 5. A systems-leaning palette.
 check(
   "systems-leaning",
   new Map<string, BucketId>([
@@ -117,7 +102,6 @@ check(
   ]),
 );
 
-// 6. Deliberately hostile: only HCI courses, nothing that fits other paths.
 check(
   "hci-only",
   new Map<string, BucketId>([
@@ -132,7 +116,6 @@ check(
   ]),
 );
 
-// 7. Smallest legal input.
 check(
   "four courses",
   new Map<string, BucketId>([
@@ -143,7 +126,6 @@ check(
   ]),
 );
 
-// 8. Every non-CS/CSE course ranked highly — the 6-credit cap has to bite.
 check(
   "non-CS-heavy",
   new Map<string, BucketId>(
@@ -153,7 +135,6 @@ check(
   ),
 );
 
-// --- request sanitising ------------------------------------------------------
 {
   const cleaned = sanitizeInterests(
     {

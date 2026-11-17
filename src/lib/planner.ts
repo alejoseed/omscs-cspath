@@ -90,7 +90,6 @@ export interface Plan {
 }
 
 export const DEGREE_COURSES = 10;
-/** "A maximum of 6 credit hours may be taken with a subject code other than CS or CSE." */
 export const MAX_NON_CS_COURSES = 2;
 
 export function countsTowardCap(courseId: string): boolean {
@@ -206,11 +205,6 @@ export async function loadInterests(
 
 const VALID_BUCKETS = new Set<string>(BUCKETS.map((b) => b.id));
 
-/**
- * Validates a client-supplied interest map against the catalog. Returns null if
- * the shape is wrong, and otherwise a map containing only real course ids and
- * real bucket ids. Bounded by the catalog size, so a huge payload is cheap.
- */
 export function sanitizeInterests(
   raw: unknown,
   catalog: Catalog,
@@ -254,7 +248,6 @@ function combinations<T>(items: T[], k: number): T[][] {
   return result;
 }
 
-/** All course selections that satisfy one requirement, best-scoring first. */
 function requirementOptions(
   req: ReqDef,
   score: (courseId: string) => number,
@@ -280,8 +273,6 @@ function requirementOptions(
       return picks;
     });
 
-    // Cartesian product, keeping selections of exactly n distinct courses that
-    // include at least one from every group.
     const walk = (index: number, chosen: string[]) => {
       if (index === groupChoices.length) {
         if (chosen.length === n) opts.push([...new Set(chosen)]);
@@ -320,12 +311,6 @@ interface Beam {
   nonCs: number;
 }
 
-/**
- * Beam search over the specialization requirements. Requirements are small, so
- * keeping the best N partial selections per requirement is exact in practice
- * while staying fast for every specialization in the catalog. The 6-credit cap
- * on non-CS/CSE subjects is applied as a hard bound at every step.
- */
 function solveRequirements(
   spec: SpecDef,
   score: (courseId: string) => number,
@@ -393,7 +378,6 @@ export function buildPlan(
   const chosenSet = new Set(chosen);
   const flavour = new Set(spec.flavourTags);
 
-  // Free electives must respect the same non-CS/CSE credit cap.
   const nonCsRanked = catalog.courses
     .filter((c) => !chosenSet.has(c.id))
     .map((c) => ({
@@ -459,10 +443,6 @@ export function buildPlan(
     .filter((c) => c.bucket !== null)
     .reduce((acc, c) => acc + c.weight, 0);
 
-  // Best achievable score for any ten-course plan: take the heaviest ranked
-  // courses first, then pad with unranked ones at their default weight. Fit is
-  // measured against that ceiling rather than against the whole ranked catalog,
-  // otherwise ranking 70 courses would make every plan look like a 13% match.
   const rankedWeights = interestIds
     .map((id) => scoreFor(id))
     .sort((a, b) => b - a);
@@ -518,8 +498,6 @@ export function buildAllPlans(
     }
   }
 
-  // Plans that carry more of the user's classes rank first; the specification
-  // fit breaks ties so a 10/10 match beats a 3/3.
   plans.sort((a, b) => {
     if (b.fit !== a.fit) return b.fit - a.fit;
     if (b.bucketsUsed.high !== a.bucketsUsed.high) {
@@ -547,7 +525,6 @@ export interface Validation {
   errors: string[];
 }
 
-/** Re-check a plan against the rules, independent of how it was produced. */
 export function validatePlan(plan: Plan, spec: SpecDef, catalog: Catalog): Validation {
   const errors: string[] = [];
   const ids = plan.courses.map((c) => c.id);
