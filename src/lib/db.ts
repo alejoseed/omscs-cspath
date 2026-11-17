@@ -8,6 +8,8 @@ import { BUCKETS, SPECIALIZATIONS } from "@/data/specializations";
 export const DB_PATH =
   process.env.OMSCS_DB_PATH ?? path.join(process.cwd(), "data", "omscs.db");
 
+const READ_ONLY_FS = process.env.OMSCS_READ_ONLY_FS === "true";
+
 export type Db = Database.Database;
 
 const SCHEMA = `
@@ -229,11 +231,32 @@ function migrate(db: Db) {
 }
 
 function create(): Db {
-  fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
-  const db = new Database(DB_PATH);
-  migrate(db);
-  seed(db);
-  return db;
+  if (READ_ONLY_FS) {
+    const db = new Database(":memory:");
+    migrate(db);
+    seed(db);
+    return db;
+  }
+
+  try {
+    fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+    const db = new Database(DB_PATH);
+    migrate(db);
+    seed(db);
+    return db;
+  } catch (error) {
+    // Some hosts ship a read-only filesystem. Rather than fail the whole app,
+    // fall back to an in-memory database: the catalog still works, but bucket
+    // edits only last for the life of the process.
+    console.warn(
+      `[db] Falling back to in-memory SQLite (${DB_PATH} is not writable):`,
+      error instanceof Error ? error.message : error,
+    );
+    const db = new Database(":memory:");
+    migrate(db);
+    seed(db);
+    return db;
+  }
 }
 
 const globalForDb = globalThis as unknown as { __omscsDb?: Db };

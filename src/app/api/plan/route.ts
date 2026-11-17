@@ -1,11 +1,23 @@
 import { getDb } from "@/lib/db";
 import { loadCatalog, loadInterests, buildAllPlans, validatePlan } from "@/lib/planner";
 import { rankPlans, deepseekConfigured } from "@/lib/llm";
+import { checkRateLimit, clientKey, pruneRateWindows } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-export async function POST() {
+export async function POST(request: Request) {
+  pruneRateWindows();
+  const limit = checkRateLimit(clientKey(request));
+  if (!limit.allowed) {
+    return Response.json(
+      {
+        error: `Too many plan runs. Try again in ${limit.retryAfterSeconds}s — each run calls DeepSeek.`,
+      },
+      { status: 429, headers: { "retry-after": String(limit.retryAfterSeconds) } },
+    );
+  }
+
   const db = getDb();
   const catalog = loadCatalog(db);
   const interests = loadInterests(db);
@@ -92,6 +104,13 @@ export async function POST() {
     narrative.summary,
     narrative.engine,
   );
+
+  // Keep only the most recent runs so the file does not grow without bound.
+  db.prepare(
+    `DELETE FROM plan_runs WHERE id NOT IN (
+       SELECT id FROM plan_runs ORDER BY created_at DESC LIMIT 50
+     )`,
+  ).run();
 
   return Response.json({ id, ...payload });
 }

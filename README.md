@@ -62,11 +62,23 @@ DeepSeek is the only LLM provider in this app. It is called over its OpenAI-comp
 | `DEEPSEEK_API_KEY` | — | Required for LLM ranking. Without it the app runs solver-only. |
 | `DEEPSEEK_MODEL` | `deepseek-chat` | Model name sent to the API. |
 | `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | Override for a proxy or gateway. |
+| `PLAN_RATE_LIMIT` | `15` | Plan runs allowed per client per window. |
+| `PLAN_RATE_WINDOW_MS` | `60000` | Length of that window in milliseconds. |
+| `OMSCS_DB_PATH` | `./data/omscs.db` | SQLite file location. |
+| `OMSCS_READ_ONLY_FS` | unset | Force the in-memory fallback database. |
 
 The model only ever **reorders and explains** plans the solver already produced. It never invents
 courses, and every plan is re-validated server-side before it is returned. If the call fails, times
 out, or returns unparseable JSON, the response falls back to the deterministic solver ranking and
 surfaces the error in the UI rather than failing the request.
+
+`/api/plan` is rate limited (15 runs per minute per client by default) because each run spends
+DeepSeek tokens. The request body is never trusted: the route takes no input at all and reads the
+buckets from SQLite, and all SQL uses bound parameters.
+
+SQLite is a local file, so if the host's filesystem is read-only the app detects the failure and
+falls back to an in-memory database — the catalog still works, but bucket edits last only as long as
+the process. Point `OMSCS_DB_PATH` at a writable volume to persist them.
 
 ## Architecture
 
