@@ -11,7 +11,7 @@ import { BucketBoard } from "@/components/bucket-board";
 import { CatalogBrowser } from "@/components/catalog-browser";
 import { PlanResults } from "@/components/plan-results";
 import { BUCKET_META } from "@/components/course-row";
-import { DeepseekKeyCard, useDeepseekKey } from "@/components/deepseek-key-card";
+import { DeepseekKeyDialog, useDeepseekKey } from "@/components/deepseek-key-dialog";
 import { cn } from "@/lib/utils";
 import {
   clearInterests,
@@ -21,7 +21,7 @@ import {
   subscribe,
 } from "@/lib/interest-store";
 import { createPlan } from "@/lib/plan.functions";
-import type { BucketId, CatalogPayload, SpecSummary } from "@/lib/types";
+import type { BucketId, CatalogPayload } from "@/lib/types";
 
 const MIN_RANKED = 4;
 
@@ -53,7 +53,7 @@ export function PlannerApp({ payload }: { payload: CatalogPayload }) {
   const generating = plan.isPending;
   const generateError = plan.error
     ? plan.error.name === "TimeoutError" || plan.error.name === "AbortError"
-      ? "The plan request timed out. Try again — the solver runs in a few seconds."
+      ? "The request timed out. Try again."
       : plan.error.message || "Could not generate plans."
     : null;
   const clearResult = plan.reset;
@@ -101,84 +101,64 @@ export function PlannerApp({ payload }: { payload: CatalogPayload }) {
   const ranked = Object.keys(interests).length;
   const ready = ranked >= MIN_RANKED;
 
-  return (
-    <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 pb-16 pt-6 sm:px-6">
-      <header className="mb-5">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="font-mono text-[9.5px] uppercase tracking-[0.18em] text-muted-foreground">
-              Georgia Tech · Online MS in Computer Science
-            </p>
-            <h1 className="mt-1 font-display text-[34px] leading-none tracking-tight sm:text-[42px]">
-              Path Builder
-            </h1>
-            <p className="mt-1.5 max-w-xl text-[12.5px] leading-relaxed text-muted-foreground">
-              Rank every OMSCS course into three interest buckets. The solver builds a legal
-              ten-course, thirty-credit plan for each specialization, then DeepSeek ranks the
-              paths for you with your own API key.
-            </p>
-          </div>
+  const label = generating
+    ? "Solving…"
+    : !ready
+      ? `Rank ${MIN_RANKED - ranked} more`
+      : result
+        ? "Re-run paths"
+        : "Create path";
 
-          <div className="flex items-center gap-3">
-            <div className="text-right">
-              <p className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground">
-                Ranked
-              </p>
-              <p className="font-mono text-lg leading-tight tabular-nums">
-                {ranked}
-                <span className="text-[11px] text-muted-foreground">
-                  /{catalog.courses.length}
-                </span>
-              </p>
-            </div>
-            <div className="h-8 w-px bg-border" />
-            <div className="flex gap-2 font-mono text-[10px] tabular-nums">
-              {(["high", "medium", "low"] as const).map((b) => (
-                <div key={b} className="flex items-center gap-1">
-                  <span className={cn("size-1.5 rounded-full", BUCKET_META[b].dot)} />
-                  <span className="text-muted-foreground">{counts[b]}</span>
-                </div>
-              ))}
-            </div>
+  return (
+    <main className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-4 p-4 lg:p-6">
+      <header className="flex flex-wrap items-center gap-4">
+        <h1 className="text-2xl font-bold">OMSCS Path Builder</h1>
+        <div className="ml-auto flex items-center gap-4">
+          <div className="flex items-center gap-3 text-xs tabular-nums">
+            <span>
+              <span className="text-sm font-bold">{ranked}</span>
+              <span className="text-muted-foreground">/{catalog.courses.length} ranked</span>
+            </span>
+            {(["high", "medium", "low"] as const).map((b) => (
+              <span key={b} className="flex items-center gap-1 text-muted-foreground">
+                <span className={cn("size-2 rounded-full", BUCKET_META[b].dot)} />
+                {counts[b]}
+              </span>
+            ))}
           </div>
+          <DeepseekKeyDialog />
         </div>
       </header>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_400px]">
-        <div className="min-w-0">
-          <div className="mb-2.5 flex items-center justify-between">
-            <div className="flex gap-1 rounded-md border border-border bg-card/60 p-0.5">
-              {(
-                [
-                  ["board", `Buckets (${ranked})`],
-                  ["catalog", `Catalog (${catalog.courses.length})`],
-                ] as const
-              ).map(([id, label]) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setTab(id)}
-                  className={cn(
-                    "rounded-sm px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors",
-                    tab === id
-                      ? "bg-foreground text-background"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={resetAll}
-              className="font-mono text-[9.5px] uppercase tracking-wider text-muted-foreground transition-colors hover:text-destructive"
-            >
-              Reset all
-            </button>
-          </div>
+      <div className="flex gap-1 self-start rounded-md border border-border bg-card/60 p-1 lg:hidden">
+        {(
+          [
+            ["board", `Buckets (${ranked})`],
+            ["catalog", `Catalog (${catalog.courses.length})`],
+          ] as const
+        ).map(([id, text]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setTab(id)}
+            className={cn(
+              "rounded-sm p-2 text-xs leading-none font-bold transition-colors",
+              tab === id ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {text}
+          </button>
+        ))}
+      </div>
 
-          <div className={cn(tab === "board" ? "block" : "hidden lg:block")}>
+      <div className="grid grid-cols-1 gap-4 lg:h-[calc(100dvh-6rem)] lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_400px]">
+        <div
+          className={cn(
+            "min-h-0 min-w-0 flex-col gap-3",
+            tab === "board" ? "flex" : "hidden lg:flex",
+          )}
+        >
+          <div className="min-h-0 flex-1">
             <BucketBoard
               courses={catalog.courses}
               interests={interests}
@@ -188,110 +168,49 @@ export function PlannerApp({ payload }: { payload: CatalogPayload }) {
             />
           </div>
 
-          <div className={cn("mt-2.5", tab === "catalog" ? "block" : "hidden lg:block")}>
-            <CatalogBrowser
-              courses={catalog.courses}
-              interests={interests}
-              coverage={result?.coverage}
-              onAssign={assign}
-              highlight={result ? new Set(result.uncovered) : undefined}
-            />
-          </div>
-
-          <div className="mt-4 flex flex-col gap-2 rounded-xl border border-border bg-card/60 p-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <p className="text-[12px] font-medium">
-                {ready
-                  ? "Ready to solve all six specializations"
-                  : `Rank ${MIN_RANKED - ranked} more course${MIN_RANKED - ranked === 1 ? "" : "s"} to unlock`}
-              </p>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">
-                {result
-                  ? "Buckets changed? Re-run to refresh every path."
-                  : "Every path is 10 courses / 30 credits and satisfies the official rules."}
-              </p>
-            </div>
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-card/60 p-3">
             <button
               type="button"
               disabled={!ready || generating}
               onClick={() => plan.mutate(interests)}
               className={cn(
-                "shrink-0 rounded-md px-4 py-2 font-mono text-[10.5px] uppercase tracking-widest transition-all",
+                "shrink-0 rounded-md p-3 text-sm leading-none font-bold transition-opacity",
                 ready
                   ? "bg-foreground text-background hover:opacity-85"
                   : "cursor-not-allowed bg-muted text-muted-foreground",
                 generating && "opacity-70",
               )}
             >
-              {generating ? "Solving…" : result ? "Re-run paths" : "Create path"}
+              {label}
+            </button>
+            {generateError && (
+              <p className="min-w-0 truncate text-sm text-destructive">{generateError}</p>
+            )}
+            <button
+              type="button"
+              onClick={resetAll}
+              className="ml-auto shrink-0 rounded-md p-2 text-xs leading-none text-muted-foreground transition-colors hover:text-destructive"
+            >
+              Reset all
             </button>
           </div>
-
-          {generateError && (
-            <p className="mt-2 rounded-md border border-destructive/30 bg-destructive/[0.06] px-2.5 py-1.5 text-[11.5px] text-foreground/85">
-              {generateError}
-            </p>
-          )}
         </div>
 
-        <aside ref={resultsRef} className="min-w-0 lg:sticky lg:top-4 lg:self-start">
-          <DeepseekKeyCard />
-          {result ? (
-            <PlanResults result={result} onReset={clearResult} />
-          ) : (
-            <EmptyResults specializations={catalog.specializations} />
-          )}
+        <aside className={cn("min-h-0 min-w-0", tab === "catalog" ? "block" : "hidden lg:block")}>
+          <CatalogBrowser
+            courses={catalog.courses}
+            interests={interests}
+            coverage={result?.coverage}
+            onAssign={assign}
+          />
         </aside>
       </div>
+
+      {result && (
+        <div ref={resultsRef} className="scroll-mt-6">
+          <PlanResults result={result} onReset={clearResult} />
+        </div>
+      )}
     </main>
-  );
-}
-
-function EmptyResults({ specializations }: { specializations: SpecSummary[] }) {
-  return (
-    <div className="rounded-xl border border-border bg-card/40 p-4">
-      <h2 className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-        Ranked paths
-      </h2>
-      <p className="mt-2 text-[12.5px] leading-relaxed text-muted-foreground">
-        Once you sort at least four courses, press{" "}
-        <span className="font-medium text-foreground">Create path</span>. You get one legal plan
-        per specialization, ordered by how much of what you love it can fit in ten courses.
-      </p>
-
-      <div className="mt-4 space-y-1.5">
-        {specializations.map((spec) => (
-          <div
-            key={spec.id}
-            className="flex items-baseline justify-between gap-2 rounded-md border border-border/70 bg-background/40 px-2.5 py-1.5"
-          >
-            <span className="text-[12px] font-medium">{spec.name}</span>
-            <span className="shrink-0 font-mono text-[9.5px] text-muted-foreground tabular-nums">
-              {spec.credits} cr
-            </span>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-4 space-y-2 border-t border-border/70 pt-3">
-        <p className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground">
-          How it works
-        </p>
-        {[
-          "Drag courses into Highly / Moderately / Barely interested.",
-          "A constraint solver satisfies each specialization's real course rules.",
-          "Free electives are filled from your highest-weighted remaining picks.",
-          "With your DeepSeek key, DeepSeek ranks the six plans and explains the trade-offs.",
-        ].map((step, i) => (
-          <div key={step} className="flex gap-2">
-            <span className="font-mono text-[9px] text-muted-foreground tabular-nums">
-              0{i + 1}
-            </span>
-            <span className="text-[11.5px] leading-snug text-foreground/75">{step}</span>
-          </div>
-        ))}
-      </div>
-
-    </div>
   );
 }

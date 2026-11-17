@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { Input } from "@/components/ui/input";
 import { CourseRow } from "@/components/course-row";
 import { cn } from "@/lib/utils";
 import type { BucketId, Course } from "@/lib/types";
@@ -13,18 +12,18 @@ const FILTERS = [
 
 type FilterId = (typeof FILTERS)[number]["id"];
 
+const chip = "rounded-md border p-2 text-xs leading-none transition-colors";
+
 export function CatalogBrowser({
   courses,
   interests,
   coverage,
   onAssign,
-  highlight,
 }: {
   courses: Course[];
   interests: Record<string, BucketId>;
   coverage?: Record<string, number>;
   onAssign: (courseId: string, bucket: BucketId | null) => void;
-  highlight?: Set<string>;
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterId>("all");
@@ -53,15 +52,15 @@ export function CatalogBrowser({
   }, [courses, query, filter, subject, interests]);
 
   return (
-    <div className="flex h-full flex-col rounded-xl border border-border bg-card/40">
-      <div className="space-y-2 border-b border-border/70 p-2.5">
-        <Input
+    <div className="flex h-full min-h-0 flex-col rounded-xl border border-border bg-card/40">
+      <div className="flex flex-col gap-2 border-b border-border/70 p-3">
+        <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder={`Search ${courses.length} courses, tags, descriptions…`}
+          placeholder="Search courses"
           aria-label="Search courses"
           name="course-search"
-          className="h-8 border-border/80 bg-background text-[12.5px]"
+          className="w-full rounded-md border border-border/80 bg-background p-2 text-sm leading-none outline-none placeholder:text-muted-foreground focus:border-foreground/40"
         />
         <div className="flex flex-wrap items-center gap-1">
           {FILTERS.map((f) => (
@@ -70,7 +69,7 @@ export function CatalogBrowser({
               type="button"
               onClick={() => setFilter(f.id)}
               className={cn(
-                "rounded-sm border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider transition-colors",
+                chip,
                 filter === f.id
                   ? "border-foreground/30 bg-foreground text-background"
                   : "border-border text-muted-foreground hover:text-foreground",
@@ -79,13 +78,12 @@ export function CatalogBrowser({
               {f.label}
             </button>
           ))}
-          <span className="mx-1 h-3 w-px bg-border" />
           <select
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
             aria-label="Filter by department"
             name="department-filter"
-            className="h-5 rounded-sm border border-border bg-transparent px-1 font-mono text-[9px] uppercase tracking-wider text-muted-foreground outline-none hover:text-foreground"
+            className={cn(chip, "border-border bg-transparent text-muted-foreground outline-none hover:text-foreground")}
           >
             {subjects.map((s) => (
               <option key={s} value={s}>
@@ -93,16 +91,16 @@ export function CatalogBrowser({
               </option>
             ))}
           </select>
-          <span className="ml-auto font-mono text-[9px] text-muted-foreground tabular-nums">
+          <span className="ml-auto text-xs text-muted-foreground tabular-nums">
             {filtered.length}/{courses.length}
           </span>
         </div>
       </div>
 
-      <div className="max-h-[520px] flex-1 space-y-1 overflow-y-auto p-2">
+      <div className="flex max-h-[70dvh] min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2 lg:max-h-none">
         {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 text-center">
-            <p className="text-[12px] font-medium text-muted-foreground">No courses match</p>
+          <div className="flex flex-col items-center gap-2 p-8 text-center">
+            <p className="text-sm text-muted-foreground">No courses match</p>
             <button
               type="button"
               onClick={() => {
@@ -110,7 +108,7 @@ export function CatalogBrowser({
                 setFilter("all");
                 setSubject("all");
               }}
-              className="mt-1 font-mono text-[9.5px] uppercase tracking-wider text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+              className="rounded-sm p-1 text-xs leading-none text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
             >
               Reset filters
             </button>
@@ -124,17 +122,10 @@ export function CatalogBrowser({
               onAssign={onAssign}
               inPlan={(coverage?.[course.id] ?? 0) > 0}
               score={coverage?.[course.id] ?? 0}
-              dense
             />
           ))
         )}
       </div>
-
-      {highlight && highlight.size > 0 && (
-        <div className="border-t border-border/70 px-2.5 py-1.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
-          {highlight.size} ranked courses sit outside every generated path
-        </div>
-      )}
     </div>
   );
 }

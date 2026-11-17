@@ -205,7 +205,7 @@ export function solverNarrative(plans: Plan[], totalRanked: number): Narrative {
     summary: best
       ? `${best.specName} ranks first, covering ${matched(best)} of your ${totalRanked} ranked courses with a ${Math.round(
           best.fit * 100,
-        )}% weighted-interest match. Add your DeepSeek API key to get advisor-style commentary instead of this rule-based summary.`
+        )}% weighted-interest match.`
       : "No plans could be built from the current buckets.",
     ranked,
   };
